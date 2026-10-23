@@ -1,0 +1,33 @@
+/* GEOTRACIA — cabecera del menú y navegación móvil */
+.sidebar-close { display: none !important; }
+
+.brand-logo-image {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #fff;
+  padding: 3px;
+}
+.brand { min-height: 48px; }
+
+@media (max-width: 1000px) {
+  .sidebar {
+    padding-top: max(18px, env(safe-area-inset-top));
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+    max-height: 100dvh;
+    overscroll-behavior: contain;
+  }
+  .sidebar-close { display: none !important; }
+  .overlay.show {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: rgba(3, 18, 32, .48);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .sidebar.open { z-index: 30; }
+}
