@@ -48,12 +48,12 @@ Deno.serve(async (req) => {
       return json(409, { ok: false, error: "El correo ya tiene una cuenta Geotracia. Usa «Añadir cuenta ya registrada» para vincularla." });
     }
 
-    const { data: subscription, error: subError } = await admin.from("geotracia_organization_subscriptions").select("status,current_period_end,operator_limit").eq("organization_id", organizationId).maybeSingle();
+    const { data: subscription, error: subError } = await admin.from("geotracia_organization_subscriptions").select("status,current_period_end,operators_limit").eq("organization_id", organizationId).maybeSingle();
     if (subError) return json(500, { ok: false, error: "No se pudo comprobar la suscripción y sus límites." });
     if (!subscription || !["trialing", "active"].includes(String(subscription.status)) || (subscription.current_period_end && new Date(subscription.current_period_end).getTime() < Date.now())) return json(403, { ok: false, error: "La suscripción no permite incorporar integrantes en este momento." });
     const { count, error: countError } = await admin.from("members").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("active", true);
     if (countError) return json(500, { ok: false, error: "No se pudo comprobar el cupo de usuarios." });
-    if (subscription.operator_limit != null && (count ?? 0) >= Number(subscription.operator_limit)) return json(403, { ok: false, error: "La organización alcanzó el límite de usuarios de su plan." });
+    if (subscription.operators_limit != null && (count ?? 0) >= Number(subscription.operators_limit)) return json(403, { ok: false, error: "La organización alcanzó el límite de usuarios de su plan." });
 
     const { data: invitation, error: insertError } = await admin.from("geotracia_organization_invitations").insert({ organization_id: organizationId, email, role, invited_by: user.id }).select("id,expires_at").single();
     if (insertError) return json(insertError.code === "23505" ? 409 : 500, { ok: false, error: insertError.code === "23505" ? "Ya existe una invitación pendiente para este correo." : "No se pudo registrar la invitación." });
