@@ -6,3 +6,6 @@ verify_jwt = false
 
 [functions.geotracia-flow-return]
 verify_jwt = false
+
+[functions.geotracia-invitations]
+verify_jwt = true
