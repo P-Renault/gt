@@ -200,12 +200,6 @@ function dash(){
     </div>
     <div class="ss-welcome-trust"><span><i>✓</i>Sin tarjeta de crédito</span><span><i>✓</i>Configuración en minutos</span><span><i>✓</i>Puedes invitar a tu equipo</span></div>
    </div>
-   <div class="ss-welcome-benefits">
-    <article><span class="ss-benefit-icon ss-blue">♧</span><b>Hasta 5 usuarios</b><small>Gestiona tu equipo de trabajo</small></article>
-    <article><span class="ss-benefit-icon ss-teal">▱</span><b>Hasta 10 proyectos</b><small>Organiza tus obras y rutas</small></article>
-    <article><span class="ss-benefit-icon ss-rose">⌖</span><b>Mapas y registros</b><small>Toda la información en un solo lugar</small></article>
-    <article><span class="ss-benefit-icon ss-amber">▥</span><b>14 días de prueba</b><small>Explora todas las funcionalidades</small></article>
-   </div>
   </section>`;
  }
  const d=dashboardData,c=dashCounts(),p=geoProjects.find(x=>x.id===dashboardProjectId)||geoProjects.find(x=>x.status!=='archived')||geoProjects[0];const formatKm=n=>Number(n||0).toLocaleString('es-CL',{minimumFractionDigits:0,maximumFractionDigits:2});const contextStatus=d.loading?'Actualizando datos…':d.error?'Error al consultar fuentes':`${d.offline?'Copia local · ':''}Actualizado ${d.loadedAt?(typeof d.loadedAt.toLocaleTimeString==='function'?d.loadedAt:new Date(d.loadedAt)).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}):'—'}`;const errors=(d.error?`<div class="dash-data-error" role="alert"><b>No se pudieron cargar todas las fuentes del dashboard.</b><p>${esc(d.error)}</p><small>Los valores no se presentan como datos reales hasta resolver el error.</small><div>${btn('↻ Reintentar','dashboard-refresh')}</div></div>`:'');const activeOptions=dashProjectOptions();const noProject=!dashboardProjectId;
