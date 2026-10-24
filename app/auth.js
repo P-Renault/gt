@@ -1,3 +1,4 @@
+/* GEOTRACIA AUTH FLOW REVISION: 2026-10-24 */
 (()=>{'use strict';
 const $=s=>document.querySelector(s);
 const gate=$('#authGate'),setup=$('#authSetup'),form=$('#loginForm'),err=$('#authError'),tabs=$('#authTabs');
@@ -41,6 +42,5 @@ if(!configured||!window.supabase?.createClient){showGate();setup.hidden=false;fo
  }catch(ex){console.error('[GEOTRACIA] Error en flujo de autenticación:',ex);const raw=ex?.message||'No se pudo completar la operación.';message(raw==='Invalid login credentials'?'Correo o contraseña incorrectos.':raw)}finally{button.disabled=false;$('#submitLabel').textContent=originalLabel}});
  $('#forgotPassword').addEventListener('click',async()=>{message('');normalizeEmailInput();const email=$('#authEmail').value;if(!email||!email.includes('@')||email.includes('.supabase.co')){message('Ingresa un correo válido para enviarte el enlace de recuperación.');return}const {error}=await client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname+'?auth=recovery'});message(error?error.message:'Si el correo existe, recibirás instrucciones para restablecer tu contraseña.')});
  const logout=$('#logoutBtn');if(logout)logout.addEventListener('click',async()=>{if(!client)return;logout.disabled=true;const {error}=await client.auth.signOut();logout.disabled=false;if(error)alert('No se pudo cerrar sesión: '+error.message)});
- if(flow==='invite'||flow==='recovery')showFlow(flow,null);
 }
 })();
