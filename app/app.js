@@ -184,21 +184,26 @@ function dashRecentActivity(){const d=dashboardData,events=[...d.inspections.map
 function dashPriorities(){const d=dashboardData,c=dashCounts(),items=[...c.activeInc.filter(x=>['critical','high'].includes(String(x.severity).toLowerCase())).map(x=>({title:x.title||x.code,kind:'Incidencia',detail:`${dashSeverity(x)} · ${dashStatusLabel(x.status)}`,date:x.occurred_at||x.created_at,level:String(x.severity).toLowerCase()})),...c.overdue.map(x=>({title:x.title||x.code,kind:'Mantenimiento',detail:'Orden vencida',date:x.due_date,level:'critical'}))].sort((a,b)=>new Date(a.date||0)-new Date(b.date||0)).slice(0,5);if(dashboardData.loading)return '<div class="dash-empty-state">Cargando prioridades…</div>';if(!items.length)return '<div class="dash-empty-state">No se encontraron incidencias críticas/altas ni órdenes vencidas en los datos consultados.</div>';return `<div class="dash-priority-list">${items.map(x=>`<div class="dash-priority-item"><span class="dash-priority-severity ${x.level}"></span><div><b>${esc(x.title)}</b><small>${esc(x.kind)} · ${esc(x.detail)}</small></div><time>${esc(dashDateLabel(x.date))}</time></div>`).join('')}</div>`}
 function dash(){
  if(!geoOrg?.id){
-  return `${head("Dashboard","Tu cuenta está autenticada, pero todavía no tiene una organización activa.")}<section class="ss-welcome" aria-labelledby="ssWelcomeTitle">
+  return `<section class="ss-welcome ss-welcome-first-access" aria-labelledby="ssWelcomeTitle">
    <div class="ss-welcome-hero">
     <div class="ss-welcome-copy">
      <span class="ss-welcome-eyebrow">BIENVENIDO A GEOTRACIA</span>
      <h2 id="ssWelcomeTitle">Crea tu <span>organización</span></h2>
      <p class="ss-welcome-lead">Comienza a gestionar tus proyectos, equipos y territorio en una sola plataforma.</p>
      <p class="ss-welcome-description">Al crear tu organización, tu cuenta quedará como <strong>owner</strong> y se iniciará una <strong>prueba gratuita de 14 días</strong> del plan Equipo (hasta 5 usuarios y 10 proyectos), sin cobro automático.</p>
-     <button class="ss-welcome-cta" type="button" data-action="create-org-welcome"><span class="ss-welcome-building" aria-hidden="true">▦</span><span>Crear organización</span><span class="ss-welcome-arrow" aria-hidden="true">→</span></button>
+     <button class="ss-welcome-cta" type="button" data-action="create-org-welcome"><span class="ss-welcome-building" aria-hidden="true">▦</span><span class="ss-welcome-cta-label">Crear organización</span><span class="ss-welcome-arrow" aria-hidden="true">→</span></button>
     </div>
     <div class="ss-welcome-visual" role="img" aria-label="Ingeniería territorial y supervisión de caminos en terreno">
      <img src="geotracia-welcome-territory.png" alt="" loading="eager">
      <div class="ss-welcome-project-float"><span class="ss-welcome-mini-icon">▥</span><span><b>Proyectos</b><small>Gestión territorial integrada</small></span></div>
      <div class="ss-welcome-territory-float"><span class="ss-welcome-mini-icon">⌖</span><span><b>Territorio en tus manos</b></span></div>
     </div>
-    <div class="ss-welcome-trust"><span><i>✓</i>Sin tarjeta de crédito</span><span><i>✓</i>Configuración en minutos</span><span><i>✓</i>Puedes invitar a tu equipo</span></div>
+    <div class="ss-welcome-benefits" aria-label="Incluye la prueba de Geotracia">
+     <article><strong>Hasta 5 usuarios</strong><span>Gestiona tu equipo de trabajo</span></article>
+     <article><strong>Hasta 10 proyectos</strong><span>Organiza tus obras y rutas</span></article>
+     <article><strong>Mapas y registros</strong><span>Información territorial en un solo lugar</span></article>
+     <article><strong>14 días de prueba</strong><span>Explora las funcionalidades del plan Equipo</span></article>
+    </div>
    </div>
   </section>`;
  }
