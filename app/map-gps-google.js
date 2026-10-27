@@ -133,7 +133,7 @@
   }
 
   function loadGoogleMaps() {
-    if (window.google?.maps?.geometry?.spherical) return Promise.resolve(window.google.maps);
+    if (window.google?.maps?.Map) return Promise.resolve(window.google.maps);
     if (state.loaderPromise) return state.loaderPromise;
     const key = API_KEY();
     if (!key) return Promise.reject(new Error('Falta configurar la clave API de Google Maps en google-maps-config.js.'));
@@ -142,7 +142,8 @@
     state.loaderPromise = new Promise((resolve, reject) => {
       const existing = document.querySelector('script[data-geotracia-google-maps-loader]');
       if (existing) {
-        existing.addEventListener('load', () => window.google?.maps?.geometry?.spherical ? resolve(window.google.maps) : reject(new Error('Google Maps cargó sin la biblioteca geometry.')),{once:true});
+        if (window.google?.maps?.Map) { resolve(window.google.maps); return; }
+        existing.addEventListener('load', () => window.google?.maps?.Map ? resolve(window.google.maps) : reject(new Error('Google Maps no terminó de inicializarse.')),{once:true});
         existing.addEventListener('error', () => reject(new Error('No se pudo cargar Google Maps. Revisa la clave API, las APIs habilitadas y la conexión.')),{once:true});
         return;
       }
@@ -150,10 +151,10 @@
       script.dataset.geotraciaGoogleMapsLoader = 'true';
       script.async = true;
       script.defer = true;
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&libraries=geometry&loading=async`;
-      script.onload = () => window.google?.maps?.geometry?.spherical
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async`;
+      script.onload = () => window.google?.maps?.Map
         ? resolve(window.google.maps)
-        : reject(new Error('Google Maps cargó sin la biblioteca geometry. Revisa la configuración de la API.'));
+        : reject(new Error('Google Maps cargó, pero la API Maps JavaScript no está disponible. Revisa la clave y la configuración del proyecto.'));
       script.onerror = () => reject(new Error('No se pudo cargar Google Maps. Revisa la clave API, las APIs habilitadas y la conexión.'));
       document.head.appendChild(script);
     }).catch(error => {
@@ -170,7 +171,7 @@
     const canvas = $('#geoGoogleMapCanvas');
     const toolbar = $('#geoGoogleMapToolbar');
     if (!canvas) return;
-    if (state.map && state.mapElement === canvas && window.google?.maps?.geometry?.spherical) {
+    if (state.map && state.mapElement === canvas && window.google?.maps?.Map) {
       canvas.hidden = false;
       if (help) help.hidden = true;
       if (toolbar) toolbar.hidden = false;
@@ -208,10 +209,24 @@
     window.setTimeout(() => maps.event.trigger(state.map, 'resize'), 150);
   }
 
+  // Distancia geodésica Haversine local: no depende de la biblioteca geometry de Google.
+  // Esto permite medir trazados aunque la clave de demostración no cargue esa biblioteca.
   function lineLength(coords) {
-    if (!window.google?.maps?.geometry?.spherical || coords.length < 2) return 0;
-    const path = coords.map(point => new google.maps.LatLng(point.lat, point.lng));
-    return google.maps.geometry.spherical.computeLength(path);
+    if (!Array.isArray(coords) || coords.length < 2) return 0;
+    const earthRadius = 6371008.8; // radio medio terrestre en metros
+    const toRadians = degrees => degrees * Math.PI / 180;
+    let total = 0;
+    for (let i = 1; i < coords.length; i++) {
+      const previous = coords[i - 1];
+      const current = coords[i];
+      const lat1 = toRadians(Number(previous.lat));
+      const lat2 = toRadians(Number(current.lat));
+      const deltaLat = lat2 - lat1;
+      const deltaLng = toRadians(Number(current.lng) - Number(previous.lng));
+      const a = Math.sin(deltaLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+      total += 2 * earthRadius * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
+    }
+    return total;
   }
 
   function addPoint(point) {
