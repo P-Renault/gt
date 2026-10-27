@@ -286,7 +286,7 @@
         let g=r.geometry;if(typeof g==='string'){try{g=JSON.parse(g)}catch{g=null}}
         if(g?.type==='Feature')g=g.geometry;
         if(!g||!['LineString','MultiLineString'].includes(g.type))return null;
-        return {type:'Feature',geometry:g,properties:{id:r.id,name:r.road_name,ref:r.road_ref,type:r.road_type,surface:r.surface,length_m:r.length_m,source:'OSM / Geofabrik Chile'}};
+        return {type:'Feature',geometry:g,properties:{id:r.id,source_id:r.source_id??r.osm_source_id??null,name:r.road_name,ref:r.road_ref,type:r.road_type,surface:r.surface,length_m:r.length_m,source:'OSM / Geofabrik Chile'}};
       }).filter(Boolean);
       nationalLayer.clearLayers();
       nationalLayer.addData({type:'FeatureCollection',features});
@@ -334,7 +334,7 @@
       style:()=>({color:'#0d9488',weight:4,opacity:.88,lineCap:'round',lineJoin:'round'}),
       onEachFeature:(feature,layer)=>{
         // Abrir la ficha persistente de GEOTRACIA, no el tooltip efímero de Leaflet.
-        const getRoad=()=>{const p=feature.properties||{};return {id:p.id,source_id:String(p.id??''),road_name:p.name||'',road_ref:p.ref||'',road_type:p.type||'',surface:p.surface||'',length_m:p.length_m,geometry:feature.geometry,source:'osm',attributes:{source:'OSM / Geofabrik Chile',source_record_id:p.id,source_name:p.name||null,source_ref:p.ref||null,source_type:p.type||null,source_surface:p.surface||null}};};
+        const getRoad=()=>{const p=feature.properties||{};return {id:p.id,source_id:String(p.source_id??p.osm_source_id??''),national_record_id:p.id,road_name:p.name||'',road_ref:p.ref||'',road_type:p.type||'',surface:p.surface||'',length_m:p.length_m,geometry:feature.geometry,source:'osm',attributes:{source:'OSM / Geofabrik Chile',source_record_id:p.source_id??p.osm_source_id??null,national_record_id:p.id,source_name:p.name||null,source_ref:p.ref||null,source_type:p.type||null,source_surface:p.surface||null}};};
         // Retrasa la ficha de un clic para distinguirla de un doble clic.
         // Si llega el doble clic, se cancela la ficha y se abre el menú de acciones.
         layer.on('click',event=>{
@@ -392,7 +392,7 @@
       if(best&&bestDistance<=28){
         window.__geoRviHandledDoubleClickAt=Date.now();
         const feature=best.feature||{},p=feature.properties||{};
-        const road={id:p.id,source_id:String(p.id??''),road_name:p.name||'',road_ref:p.ref||'',road_type:p.type||'',surface:p.surface||'',length_m:p.length_m,geometry:feature.geometry,source:'osm',attributes:{source:'OSM / Geofabrik Chile',source_record_id:p.id,source_name:p.name||null,source_ref:p.ref||null,source_type:p.type||null,source_surface:p.surface||null}};
+        const road={id:p.id,source_id:String(p.source_id??p.osm_source_id??''),national_record_id:p.id,road_name:p.name||'',road_ref:p.ref||'',road_type:p.type||'',surface:p.surface||'',length_m:p.length_m,geometry:feature.geometry,source:'osm',attributes:{source:'OSM / Geofabrik Chile',source_record_id:p.source_id??p.osm_source_id??null,national_record_id:p.id,source_name:p.name||null,source_ref:p.ref||null,source_type:p.type||null,source_surface:p.surface||null}};
         clearTimeout(nationalClickTimer);if(event.originalEvent){L.DomEvent.stopPropagation(event.originalEvent);L.DomEvent.preventDefault(event.originalEvent);}openRviActionMenu(road,event.latlng);
       }
     });
