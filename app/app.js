@@ -116,7 +116,7 @@ async function loadDashboardData(projectId=null){
  try{
   const since=dashPeriodStart().toISOString();
   const queries=await Promise.all([
-   c.from('roads').select('id,organization_id,project_id,code,name,length_m,official_length_m,geometry_length_m,geom,is_test,intervention_start_km,intervention_end_km').eq('organization_id',geoOrg.id).eq('project_id',dashboardProjectId).eq('is_test',false).order('code').limit(5000),
+   c.from('roads').select('id,organization_id,project_id,code,name,length_m,official_length_m,geometry_length_m,geom,attributes,intervention_start_km,intervention_end_km,is_test').eq('organization_id',geoOrg.id).eq('project_id',dashboardProjectId).eq('is_test',false).order('code').limit(5000),
    c.from('segments').select('id,organization_id,project_id,road_id,code,start_km,end_km,condition,is_test').eq('organization_id',geoOrg.id).eq('project_id',dashboardProjectId).eq('is_test',false).order('start_km').limit(10000),
    c.from('road_incidents').select('id,organization_id,project_id,road_id,segment_id,code,title,incident_type,severity,status,km_progressive,occurred_at,created_at,updated_at').eq('organization_id',geoOrg.id).eq('project_id',dashboardProjectId).order('created_at',{ascending:false}).limit(5000),
    c.from('inspections').select('id,organization_id,project_id,road_id,segment_id,code,title,inspection_type,inspection_date,status,condition,created_at,updated_at').eq('organization_id',geoOrg.id).eq('project_id',dashboardProjectId).gte('inspection_date',since.slice(0,10)).order('inspection_date',{ascending:false}).limit(5000),
@@ -145,10 +145,10 @@ async function loadDashboardData(projectId=null){
   try{
    if(roadGeometryResult.status!=='fulfilled')throw roadGeometryResult.reason;
    const g=roadGeometryResult.value;if(g.error)throw g.error;
-   geometries=(g.data||[]).map(x=>{let geo=x.geojson||x.road_geojson||x.geom_geojson||x.geom;if(typeof geo==='string'){try{geo=JSON.parse(geo)}catch{geo=null}}if(geo?.type==='Feature')geo=geo.geometry;return {road_id:x.road_id||x.id,geojson:geo,length_m:x.length_m==null?null:Number(x.length_m)}}).filter(x=>x.road_id&&x.geojson&&x.geojson.type&&x.geojson.coordinates);
+   geometries=(g.data||[]).map(x=>{let geo=x.geojson||x.road_geojson||x.geom_geojson||x.geom;if(typeof geo==='string'){try{geo=JSON.parse(geo)}catch{geo=null}}if(geo?.type==='Feature')geo=geo.geometry;const road=(queries[0].data||[]).find(r=>r.id===(x.road_id||x.id));return {road_id:x.road_id||x.id,geojson:geo,length_m:x.length_m==null?(road?.length_m||road?.geometry_length_m||road?.official_length_m||null):Number(x.length_m),start_km:x.intervention_start_km??road?.intervention_start_km??road?.attributes?.km_start??null,end_km:x.intervention_end_km??road?.intervention_end_km??road?.attributes?.km_end??null}}).filter(x=>x.road_id&&x.geojson&&x.geojson.type&&x.geojson.coordinates);
   }catch(e){
    geometryWarning='No se pudieron cargar geometrías mediante la RPC: '+(e?.message||'error de consulta');console.warn('[GEOTRACIA] geotracia_project_road_geometries',e);
-   geometries=(queries[0].data||[]).map(r=>{let geo=r.geom;if(typeof geo==='string'){try{geo=JSON.parse(geo)}catch{geo=null}}if(geo?.type==='Feature')geo=geo.geometry;return {road_id:r.id,geojson:geo,length_m:r.length_m||r.geometry_length_m||r.official_length_m||null}}).filter(x=>x.road_id&&x.geojson&&x.geojson.type&&x.geojson.coordinates);
+   geometries=(queries[0].data||[]).map(r=>{let geo=r.geom;if(typeof geo==='string'){try{geo=JSON.parse(geo)}catch{geo=null}}if(geo?.type==='Feature')geo=geo.geometry;return {road_id:r.id,geojson:geo,length_m:r.length_m||r.geometry_length_m||r.official_length_m||null,start_km:r.intervention_start_km??r.attributes?.km_start??null,end_km:r.intervention_end_km??r.attributes?.km_end??null}}).filter(x=>x.road_id&&x.geojson&&x.geojson.type&&x.geojson.coordinates);
   }
   // Geometrías de tramos.
   try{
@@ -165,7 +165,7 @@ async function loadDashboardData(projectId=null){
   const roadGeometryById=new Map(geometries.map(g=>[g.road_id,g]));
   const fallbackSegments=(queries[1].data||[]).filter(seg=>!existingSegmentIds.has(seg.id)).map(seg=>{
    const road=roadGeometryById.get(seg.road_id);
-   const clipped=road?dashboardClipRoadByProgressive(road.geojson,seg.start_km,seg.end_km,road.length_m):null;
+   const clipped=road?dashboardClipRoadByProgressive(road.geojson,seg.start_km,seg.end_km,road.length_m,road.start_km,road.end_km):null;
    return {segment_id:seg.id,road_id:seg.road_id,code:seg.code,start_km:seg.start_km==null?null:Number(seg.start_km),end_km:seg.end_km==null?null:Number(seg.end_km),geojson:clipped};
   }).filter(x=>x.segment_id&&x.road_id&&x.geojson);
   segmentGeometries.push(...fallbackSegments);
@@ -215,7 +215,7 @@ function dash(){
  <div class="dash-priority-grid"><section class="panel"><div class="panel-head"><div><h2>Prioridades operativas</h2><div class="sub">Incidencias de alta severidad y órdenes vencidas</div></div><span class="badge">${d.error?'—':c.activeInc.filter(x=>['critical','high'].includes(String(x.severity).toLowerCase())).length+c.overdue.length} pendientes</span></div><div class="panel-body">${errors?'':dashPriorities()}</div></section><section class="panel"><div class="panel-head"><div><h2>Actividad reciente</h2><div class="sub">Inspecciones, incidencias y mantenimiento</div></div></div><div class="panel-body">${errors?'':dashRecentActivity()}</div></section></div>
  <div class="dash-chart-grid">${panel('1. Incidencias por severidad y estado',body(`<div class="dash-chart-legend"><span><i class="legend-critical"></i>Críticas</span><span><i class="legend-high"></i>Altas</span><span><i class="legend-medium"></i>Medias</span><span><i class="legend-low"></i>Bajas</span></div>${d.error?'':dashSvgBarChart()}<p class="dash-chart-caption">Incidencias activas: ${d.error?'—':c.activeInc.length}. Los registros resueltos y archivados se excluyen.</p>`),'Distribución de incidencias activas por severidad')}${panel('2. Evolución temporal de la actividad',body(d.error?'':dashTrendSvg()),'Tendencia en el período seleccionado')}${panel('3. Mapa operativo de la red vial',body(`<div id="dashboardMap" class="dash-real-map"></div><div id="dashboardMapStatus" class="dash-map-status">${d.error?'No se pudo consultar la fuente geográfica.':d.loading?'Cargando caminos y geometrías…':d.geometryWarning?'Geometrías no disponibles: '+esc(d.geometryWarning):'Se mostrarán los caminos que tengan geometría disponible.'}</div><div class="dash-chart-legend"><span><i class="legend-blue"></i>Caminos y tramos</span><span><i class="legend-high"></i>Incidencias</span><span><i class="legend-teal"></i>Mantenimiento</span></div><div id="dashboardRoadList" class="dash-road-list" aria-label="Lista de caminos"></div>`),'Vista territorial de caminos, incidencias y trabajos')}${panel('4. Estado del mantenimiento',body(d.error?'':`<div class="dash-maintenance-zero">${maintenanceRows.map(([label,value])=>`<div><span>${label}</span><strong>${value}</strong><i><b style="width:${d.maintenance.length?value/d.maintenance.length*100:0}%"></b></i></div>`).join('')}</div><p class="dash-chart-caption">Total de órdenes consultadas: ${d.maintenance.length}. Vencida = fecha de vencimiento anterior a hoy y estado no terminado/cancelado.</p>`),'Órdenes programadas, en ejecución, vencidas y terminadas')}</div>
  <div class="dash-footnote"><span class="dash-status-dot"></span>${d.error?'Dashboard en estado de diagnóstico: revisa los errores de consulta antes de interpretar los valores.':d.loading?'Cargando datos reales desde Supabase…':noProject?'No hay proyecto seleccionado.':'Datos del proyecto consultados desde Supabase. Las fuentes se filtran por organización y proyecto.'}</div>`}
-function dashboardClipRoadByProgressive(geojson,startKm,endKm,declaredLengthM,originKm=0){
+function dashboardClipRoadByProgressive(geojson,startKm,endKm,declaredLengthM,roadStartKm=null,roadEndKm=null){
  // Recorta una geometría LineString real usando las progresivas registradas del tramo.
  // Se alinea con inventoryLinePoint: las progresivas se escalan sobre la longitud declarada
  // del camino cuando existe; si no, se usa la longitud geodésica de la geometría.
@@ -231,13 +231,16 @@ function dashboardClipRoadByProgressive(geojson,startKm,endKm,declaredLengthM,or
  if(total<=0)return null;
  const declared=Number(declaredLengthM)>0?Number(declaredLengthM):total;
  // Las progresivas contractuales pueden ser absolutas (p. ej. km 56,349–86,259),
- // mientras que la geometría del camino comienza en su progresiva inicial.
- // Restamos el origen antes de convertir a distancia sobre la geometría.
- const origin=Number.isFinite(Number(originKm))?Number(originKm):0;
- const relativeStart=Number(startKm)-origin;
- const relativeEnd=Number(endKm)-origin;
- let from=Math.max(0,Math.min(total,relativeStart*1000/declared*total));
- let to=Math.max(0,Math.min(total,relativeEnd*1000/declared*total));
+ // mientras que la geometría representa solo ese intervalo. En ese caso se calcula
+ // la posición relativa restando la progresiva inicial del camino, no desde km 0.
+ const roadFrom=Number(roadStartKm),roadTo=Number(roadEndKm);
+ const hasRoadCalibration=Number.isFinite(roadFrom)&&Number.isFinite(roadTo)&&roadTo>roadFrom;
+ const span=hasRoadCalibration?(roadTo-roadFrom):(declared/1000);
+ const relFrom=hasRoadCalibration?(Number(startKm)-roadFrom):Number(startKm);
+ const relTo=hasRoadCalibration?(Number(endKm)-roadFrom):Number(endKm);
+ // Si las progresivas del tramo coinciden con el intervalo registrado, usar el eje completo.
+ let from=Math.max(0,Math.min(total,relFrom*1000/span*total));
+ let to=Math.max(0,Math.min(total,relTo*1000/span*total));
  if(to<=from)return null;
  const out=[];let walked=0;
  for(let i=1;i<flat.length;i++){
@@ -263,15 +266,8 @@ async function renderDashboardMap(){
   if(!g?.geojson)continue;
   try{let gj=g.geojson;if(typeof gj==='string')gj=JSON.parse(gj);if(gj?.type==='Feature')gj=gj.geometry;if(!gj?.type||!gj.coordinates)continue;
    const name=[r.code,r.name].filter(Boolean).join(' · ')||'Camino sin nombre';
-   const layer=L.geoJSON(gj,{style:()=>({color:'#94a3b8',weight:4,opacity:.88,lineCap:'round',lineJoin:'round'}),onEachFeature:(_,ly)=>{ly.on('click',()=>selectDashboardRoad(r.id));ly.bindTooltip(esc(name))}}).addTo(map);
+   const layer=L.geoJSON(gj,{style:()=>({color:'#1769ee',weight:4,opacity:.9,lineCap:'round',lineJoin:'round'}),onEachFeature:(_,ly)=>{ly.on('click',()=>selectDashboardRoad(r.id));ly.bindTooltip(esc(name))}}).addTo(map);
    window.dashboardRoadLayers.set(r.id,layer);roadsWithGeometry.push({road:r,name,layer});if(layer.getBounds().isValid())bounds.push(layer.getBounds());roadCount++;
-   // Resaltar únicamente el intervalo contractual de la faena; conservar el eje completo en gris.
-   const kmStart=r.intervention_start_km,kmEnd=r.intervention_end_km;
-   if(kmStart!=null&&kmEnd!=null&&Number(kmEnd)>Number(kmStart)){
-    const declared=Number(r.length_m||r.official_length_m||r.geometry_length_m||0);
-    const clipped=dashboardClipRoadByProgressive(gj,Number(kmStart),Number(kmEnd),declared,Number(kmStart));
-    if(clipped){const workLayer=L.geoJSON(clipped,{style:{color:'#ef4444',weight:7,opacity:1,lineCap:'round',lineJoin:'round'}}).addTo(map);workLayer.bindTooltip(`${esc(name)} · Faena km ${Number(kmStart).toLocaleString('es-CL',{minimumFractionDigits:3,maximumFractionDigits:3})}–${Number(kmEnd).toLocaleString('es-CL',{minimumFractionDigits:3,maximumFractionDigits:3})}`);if(workLayer.getBounds().isValid())bounds.push(workLayer.getBounds())}
-   }
   }catch(e){console.warn('[GEOTRACIA] GeoJSON inválido para camino '+(r.code||r.id),e)}
  }
  // Mantener el dibujo de tramos, pero sin impedir que se trace el camino base cuando no existen geometrías de tramo.
