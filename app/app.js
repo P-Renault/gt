@@ -116,7 +116,7 @@ async function loadDashboardData(projectId=null){
  try{
   const since=dashPeriodStart().toISOString();
   const queries=await Promise.all([
-   c.from('roads').select('id,organization_id,project_id,code,name,length_m,official_length_m,geometry_length_m,geom,is_test').eq('organization_id',geoOrg.id).eq('project_id',dashboardProjectId).eq('is_test',false).order('code').limit(5000),
+   c.from('roads').select('id,organization_id,project_id,code,name,length_m,official_length_m,geometry_length_m,geom,is_test,intervention_start_km,intervention_end_km').eq('organization_id',geoOrg.id).eq('project_id',dashboardProjectId).eq('is_test',false).order('code').limit(5000),
    c.from('segments').select('id,organization_id,project_id,road_id,code,start_km,end_km,condition,is_test').eq('organization_id',geoOrg.id).eq('project_id',dashboardProjectId).eq('is_test',false).order('start_km').limit(10000),
    c.from('road_incidents').select('id,organization_id,project_id,road_id,segment_id,code,title,incident_type,severity,status,km_progressive,occurred_at,created_at,updated_at').eq('organization_id',geoOrg.id).eq('project_id',dashboardProjectId).order('created_at',{ascending:false}).limit(5000),
    c.from('inspections').select('id,organization_id,project_id,road_id,segment_id,code,title,inspection_type,inspection_date,status,condition,created_at,updated_at').eq('organization_id',geoOrg.id).eq('project_id',dashboardProjectId).gte('inspection_date',since.slice(0,10)).order('inspection_date',{ascending:false}).limit(5000),
@@ -215,47 +215,39 @@ function dash(){
  <div class="dash-priority-grid"><section class="panel"><div class="panel-head"><div><h2>Prioridades operativas</h2><div class="sub">Incidencias de alta severidad y órdenes vencidas</div></div><span class="badge">${d.error?'—':c.activeInc.filter(x=>['critical','high'].includes(String(x.severity).toLowerCase())).length+c.overdue.length} pendientes</span></div><div class="panel-body">${errors?'':dashPriorities()}</div></section><section class="panel"><div class="panel-head"><div><h2>Actividad reciente</h2><div class="sub">Inspecciones, incidencias y mantenimiento</div></div></div><div class="panel-body">${errors?'':dashRecentActivity()}</div></section></div>
  <div class="dash-chart-grid">${panel('1. Incidencias por severidad y estado',body(`<div class="dash-chart-legend"><span><i class="legend-critical"></i>Críticas</span><span><i class="legend-high"></i>Altas</span><span><i class="legend-medium"></i>Medias</span><span><i class="legend-low"></i>Bajas</span></div>${d.error?'':dashSvgBarChart()}<p class="dash-chart-caption">Incidencias activas: ${d.error?'—':c.activeInc.length}. Los registros resueltos y archivados se excluyen.</p>`),'Distribución de incidencias activas por severidad')}${panel('2. Evolución temporal de la actividad',body(d.error?'':dashTrendSvg()),'Tendencia en el período seleccionado')}${panel('3. Mapa operativo de la red vial',body(`<div id="dashboardMap" class="dash-real-map"></div><div id="dashboardMapStatus" class="dash-map-status">${d.error?'No se pudo consultar la fuente geográfica.':d.loading?'Cargando caminos y geometrías…':d.geometryWarning?'Geometrías no disponibles: '+esc(d.geometryWarning):'Se mostrarán los caminos que tengan geometría disponible.'}</div><div class="dash-chart-legend"><span><i class="legend-blue"></i>Caminos y tramos</span><span><i class="legend-high"></i>Incidencias</span><span><i class="legend-teal"></i>Mantenimiento</span></div><div id="dashboardRoadList" class="dash-road-list" aria-label="Lista de caminos"></div>`),'Vista territorial de caminos, incidencias y trabajos')}${panel('4. Estado del mantenimiento',body(d.error?'':`<div class="dash-maintenance-zero">${maintenanceRows.map(([label,value])=>`<div><span>${label}</span><strong>${value}</strong><i><b style="width:${d.maintenance.length?value/d.maintenance.length*100:0}%"></b></i></div>`).join('')}</div><p class="dash-chart-caption">Total de órdenes consultadas: ${d.maintenance.length}. Vencida = fecha de vencimiento anterior a hoy y estado no terminado/cancelado.</p>`),'Órdenes programadas, en ejecución, vencidas y terminadas')}</div>
  <div class="dash-footnote"><span class="dash-status-dot"></span>${d.error?'Dashboard en estado de diagnóstico: revisa los errores de consulta antes de interpretar los valores.':d.loading?'Cargando datos reales desde Supabase…':noProject?'No hay proyecto seleccionado.':'Datos del proyecto consultados desde Supabase. Las fuentes se filtran por organización y proyecto.'}</div>`}
-function dashboardGeometryLengthM(geojson){
- // Longitud geodésica por cada línea; no conecta segmentos separados ni inventa enlaces.
- if(typeof geojson==='string'){try{geojson=JSON.parse(geojson)}catch{return 0}}
- const lines=[];
- const collect=g=>{if(!g)return;if(g.type==='Feature')collect(g.geometry);else if(g.type==='FeatureCollection')(g.features||[]).forEach(collect);else if(g.type==='GeometryCollection')(g.geometries||[]).forEach(collect);else if(g.type==='LineString')lines.push(g.coordinates||[]);else if(g.type==='MultiLineString')lines.push(...(g.coordinates||[]))};
- collect(geojson);
- const rad=x=>x*Math.PI/180;
- const hav=(a,b)=>{const dLat=rad(Number(b[1])-Number(a[1])),dLon=rad(Number(b[0])-Number(a[0])),q=Math.sin(dLat/2)**2+Math.cos(rad(Number(a[1])))*Math.cos(rad(Number(b[1])))*Math.sin(dLon/2)**2;return 6371008.8*2*Math.atan2(Math.sqrt(q),Math.sqrt(Math.max(0,1-q)))};
- let total=0;for(const line of lines){for(let i=1;i<line.length;i++){const a=line[i-1],b=line[i];if(Array.isArray(a)&&Array.isArray(b)&&a.length>=2&&b.length>=2&&[a[0],a[1],b[0],b[1]].every(v=>Number.isFinite(Number(v))))total+=hav(a,b)}}return total;
-}
-function dashboardClipRoadByProgressive(geojson,startKm,endKm,declaredLengthM){
- // start_km/end_km pueden ser progresivas absolutas (p. ej. 56,349–86,259),
- // mientras que la geometría asociada puede representar solo ese tramo (29,910 km).
- // Si la diferencia de progresivas coincide con el largo declarado, conserva toda la
- // geometría: no se debe usar 56,349 km como offset dentro de una línea de 29,910 km.
- if(typeof geojson==='string'){try{geojson=JSON.parse(geojson)}catch{return null}}
+function dashboardClipRoadByProgressive(geojson,startKm,endKm,declaredLengthM,originKm=0){
+ // Recorta una geometría LineString real usando las progresivas registradas del tramo.
+ // Se alinea con inventoryLinePoint: las progresivas se escalan sobre la longitud declarada
+ // del camino cuando existe; si no, se usa la longitud geodésica de la geometría.
  if(!geojson||!Number.isFinite(Number(startKm))||!Number.isFinite(Number(endKm))||Number(startKm)<0||Number(endKm)<=Number(startKm))return null;
- const sourceLines=[];
+ let sourceLines=[];
  const collect=g=>{if(!g)return;if(g.type==='LineString')sourceLines.push(g.coordinates||[]);else if(g.type==='MultiLineString')sourceLines.push(...(g.coordinates||[]));else if(g.type==='Feature')collect(g.geometry);else if(g.type==='FeatureCollection')(g.features||[]).forEach(collect);else if(g.type==='GeometryCollection')(g.geometries||[]).forEach(collect)};collect(geojson);
- const validLines=sourceLines.map(line=>line.filter(c=>Array.isArray(c)&&c.length>=2&&Number.isFinite(Number(c[0]))&&Number.isFinite(Number(c[1]))).map(c=>[Number(c[0]),Number(c[1]),...(c.length>2?[Number(c[2])]:[])] )).filter(line=>line.length>=2);
+ const validLines=sourceLines.map(line=>line.filter(c=>Array.isArray(c)&&c.length>=2&&Number.isFinite(Number(c[0]))&&Number.isFinite(Number(c[1])))).filter(line=>line.length>=2);
  if(!validLines.length)return null;
- const total=dashboardGeometryLengthM({type:'MultiLineString',coordinates:validLines});if(total<=0)return null;
+ const hav=(a,b)=>{const rad=x=>x*Math.PI/180,dLat=rad(b[1]-a[1]),dLon=rad(b[0]-a[0]),q=Math.sin(dLat/2)**2+Math.cos(rad(a[1]))*Math.cos(rad(b[1]))*Math.sin(dLon/2)**2;return 6371008.8*2*Math.atan2(Math.sqrt(q),Math.sqrt(Math.max(0,1-q)))};
+ const flat=[];let total=0;
+ // La red se trata como una secuencia ordenada de coordenadas; no se inventan puntos.
+ for(const line of validLines){for(let i=0;i<line.length;i++){const c=[Number(line[i][0]),Number(line[i][1]),...(line[i].length>2?[Number(line[i][2])]:[])];if(flat.length){const prev=flat[flat.length-1];total+=hav(prev,c)}flat.push(c)}}
+ if(total<=0)return null;
  const declared=Number(declaredLengthM)>0?Number(declaredLengthM):total;
- const spanM=(Number(endKm)-Number(startKm))*1000;
- // La geometría es del propio tramo, no del eje completo con progresiva local.
- if(Math.abs(spanM-declared)<=Math.max(100,declared*0.03)){
-  return validLines.length===1?{type:'Feature',properties:{derived_from:'segment_geometry_preserved',start_km:Number(startKm),end_km:Number(endKm)},geometry:{type:'LineString',coordinates:validLines[0]}}:{type:'Feature',properties:{derived_from:'segment_geometry_preserved',start_km:Number(startKm),end_km:Number(endKm)},geometry:{type:'MultiLineString',coordinates:validLines}};
- }
- // Solo recortar si las progresivas son offsets locales válidos sobre el camino completo.
- const declaredKm=declared/1000;
- if(Number(endKm)>declaredKm+0.001)return null;
- const from=Math.max(0,Math.min(total,Number(startKm)*1000/declared*total));
- const to=Math.max(0,Math.min(total,Number(endKm)*1000/declared*total));
+ // Las progresivas contractuales pueden ser absolutas (p. ej. km 56,349–86,259),
+ // mientras que la geometría del camino comienza en su progresiva inicial.
+ // Restamos el origen antes de convertir a distancia sobre la geometría.
+ const origin=Number.isFinite(Number(originKm))?Number(originKm):0;
+ const relativeStart=Number(startKm)-origin;
+ const relativeEnd=Number(endKm)-origin;
+ let from=Math.max(0,Math.min(total,relativeStart*1000/declared*total));
+ let to=Math.max(0,Math.min(total,relativeEnd*1000/declared*total));
  if(to<=from)return null;
- const rad=x=>x*Math.PI/180;
- const hav=(a,b)=>{const dLat=rad(b[1]-a[1]),dLon=rad(b[0]-a[0]),q=Math.sin(dLat/2)**2+Math.cos(rad(a[1]))*Math.cos(rad(b[1]))*Math.sin(dLon/2)**2;return 6371008.8*2*Math.atan2(Math.sqrt(q),Math.sqrt(Math.max(0,1-q)))};
- const outLines=[];let walked=0;
- // Cada LineString mantiene su propia continuidad; no se dibujan puentes artificiales entre líneas.
- for(const line of validLines){const lineLengths=[];let lineTotal=0;for(let i=1;i<line.length;i++){const d=hav(line[i-1],line[i]);lineLengths.push(d);lineTotal+=d}const lineStart=walked,lineEnd=walked+lineTotal,lo=Math.max(from,lineStart),hi=Math.min(to,lineEnd);if(hi>lo){const out=[];let pos=lineStart;for(let i=1;i<line.length;i++){const a=line[i-1],b=line[i],len=lineLengths[i-1];if(len<=0)continue;const segStart=pos,segEnd=pos+len,clipLo=Math.max(lo,segStart),clipHi=Math.min(hi,segEnd);if(clipHi>clipLo){const interp=f=>{const c=[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f];if(a.length>2&&b.length>2)c.push(a[2]+(b[2]-a[2])*f);return c};const p0=interp((clipLo-segStart)/len),p1=interp((clipHi-segStart)/len);if(!out.length||out[out.length-1][0]!==p0[0]||out[out.length-1][1]!==p0[1])out.push(p0);out.push(p1)}pos=segEnd}if(out.length>=2)outLines.push(out)}walked=lineEnd}
- if(!outLines.length)return null;
- return {type:'Feature',properties:{derived_from:'road_geometry_and_local_progressives',start_km:Number(startKm),end_km:Number(endKm)},geometry:outLines.length===1?{type:'LineString',coordinates:outLines[0]}:{type:'MultiLineString',coordinates:outLines}};
+ const out=[];let walked=0;
+ for(let i=1;i<flat.length;i++){
+  const a=flat[i-1],b=flat[i],len=hav(a,b);if(len<=0)continue;const segStart=walked,segEnd=walked+len;
+  const lo=Math.max(from,segStart),hi=Math.min(to,segEnd);
+  if(hi>=lo&&hi-lo>0){const f0=(lo-segStart)/len,f1=(hi-segStart)/len;const interp=f=>{const c=[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f];if(a.length>2&&b.length>2)c.push(a[2]+(b[2]-a[2])*f);return c};const p0=interp(f0),p1=interp(f1);if(!out.length||out[out.length-1][0]!==p0[0]||out[out.length-1][1]!==p0[1])out.push(p0);out.push(p1)}
+  walked=segEnd;
+ }
+ if(out.length<2)return null;
+ return {type:'Feature',properties:{derived_from:'road_geometry_and_registered_progressives',start_km:Number(startKm),end_km:Number(endKm)},geometry:{type:'LineString',coordinates:out}};
 }
 async function renderDashboardMap(){
  const el=$('#dashboardMap');if(!el||active!=='dashboard'||!window.L)return;
@@ -271,8 +263,15 @@ async function renderDashboardMap(){
   if(!g?.geojson)continue;
   try{let gj=g.geojson;if(typeof gj==='string')gj=JSON.parse(gj);if(gj?.type==='Feature')gj=gj.geometry;if(!gj?.type||!gj.coordinates)continue;
    const name=[r.code,r.name].filter(Boolean).join(' · ')||'Camino sin nombre';
-   const layer=L.geoJSON(gj,{style:()=>({color:'#1769ee',weight:4,opacity:.9,lineCap:'round',lineJoin:'round'}),onEachFeature:(_,ly)=>{ly.on('click',()=>selectDashboardRoad(r.id));ly.bindTooltip(esc(name))}}).addTo(map);
+   const layer=L.geoJSON(gj,{style:()=>({color:'#94a3b8',weight:4,opacity:.88,lineCap:'round',lineJoin:'round'}),onEachFeature:(_,ly)=>{ly.on('click',()=>selectDashboardRoad(r.id));ly.bindTooltip(esc(name))}}).addTo(map);
    window.dashboardRoadLayers.set(r.id,layer);roadsWithGeometry.push({road:r,name,layer});if(layer.getBounds().isValid())bounds.push(layer.getBounds());roadCount++;
+   // Resaltar únicamente el intervalo contractual de la faena; conservar el eje completo en gris.
+   const kmStart=r.intervention_start_km,kmEnd=r.intervention_end_km;
+   if(kmStart!=null&&kmEnd!=null&&Number(kmEnd)>Number(kmStart)){
+    const declared=Number(r.length_m||r.official_length_m||r.geometry_length_m||0);
+    const clipped=dashboardClipRoadByProgressive(gj,Number(kmStart),Number(kmEnd),declared,Number(kmStart));
+    if(clipped){const workLayer=L.geoJSON(clipped,{style:{color:'#ef4444',weight:7,opacity:1,lineCap:'round',lineJoin:'round'}}).addTo(map);workLayer.bindTooltip(`${esc(name)} · Faena km ${Number(kmStart).toLocaleString('es-CL',{minimumFractionDigits:3,maximumFractionDigits:3})}–${Number(kmEnd).toLocaleString('es-CL',{minimumFractionDigits:3,maximumFractionDigits:3})}`);if(workLayer.getBounds().isValid())bounds.push(workLayer.getBounds())}
+   }
   }catch(e){console.warn('[GEOTRACIA] GeoJSON inválido para camino '+(r.code||r.id),e)}
  }
  // Mantener el dibujo de tramos, pero sin impedir que se trace el camino base cuando no existen geometrías de tramo.
@@ -282,7 +281,7 @@ async function renderDashboardMap(){
   if(!window.dashboardSegmentLayers.has(seg.road_id))window.dashboardSegmentLayers.set(seg.road_id,[]);window.dashboardSegmentLayers.get(seg.road_id).push({segment:seg,layer});if(layer.getBounds().isValid())bounds.push(layer.getBounds());
  }catch(e){console.warn('[GEOTRACIA] Geometría de tramo inválida',seg.segment_id,e)}}
  for(const x of dashboardData.incidents||[]){if(!dashIsActiveIncident(x)||x.km_progressive==null)continue;const g=geoByRoad.get(x.road_id);if(!g)continue;const pt=inventoryLinePoint(g.geojson,x.km_progressive,g.length_m);if(!pt)continue;const sev=String(x.severity||'').toLowerCase();const marker=L.circleMarker([pt.lat,pt.lng],{radius:sev==='critical'?8:6,color:'#fff',weight:2,fillColor:['critical','high'].includes(sev)?'#dc6268':'#df9b37',fillOpacity:.95}).addTo(map);marker.bindPopup(`<b>${esc(x.title||x.code||'Incidencia')}</b><br>${esc(dashSeverity(x))} · ${esc(dashStatusLabel(x.status))}`);bounds.push(L.latLngBounds([marker.getLatLng(),marker.getLatLng()]));incidentCount++}
- const list=$('#dashboardRoadList');if(list){list.innerHTML=(dashboardData.roads||[]).length?`<div class="dash-road-list-head"><b>Caminos del proyecto</b><span>${(dashboardData.roads||[]).length}</span></div>${(dashboardData.roads||[]).map((r,i)=>{const n=(window.dashboardSegmentLayers.get(r.id)||[]).length,has=window.dashboardRoadLayers.has(r.id),roadGeo=geoByRoad.get(r.id)?.geojson||r.geom,declaredM=Number(r.length_m||r.official_length_m||r.geometry_length_m||0),actualM=dashboardGeometryLengthM(roadGeo),mismatch=declaredM>0&&actualM>0&&Math.abs(actualM-declaredM)>Math.max(500,declaredM*.15),geometryNote=mismatch?` · geometría ${ (actualM/1000).toLocaleString('es-CL',{maximumFractionDigits:2})} km frente a ${(declaredM/1000).toLocaleString('es-CL',{maximumFractionDigits:2})} km registrados`:'';return `<button type="button" class="dash-road-option" data-road-id="${esc(r.id)}" aria-pressed="false"><span class="dash-road-number">${i+1}</span><span class="dash-road-copy"><b>${esc([r.code,r.name].filter(Boolean).join(' · ')||'Camino sin nombre')}</b><small>${declaredM>0?(declaredM/1000).toLocaleString('es-CL',{maximumFractionDigits:2})+' km':'Longitud no informada'} · ${n} tramos geográficos${has?'':' · geometría no disponible'}${geometryNote}</small></span><span class="dash-road-chevron">›</span></button>`}).join('')}`:'<div class="dash-empty-state">No hay caminos en este proyecto.</div>';list.querySelectorAll('[data-road-id]').forEach(btn=>btn.addEventListener('click',()=>selectDashboardRoad(btn.dataset.roadId)))}
+ const list=$('#dashboardRoadList');if(list){list.innerHTML=(dashboardData.roads||[]).length?`<div class="dash-road-list-head"><b>Caminos del proyecto</b><span>${(dashboardData.roads||[]).length}</span></div>${(dashboardData.roads||[]).map((r,i)=>{const n=(window.dashboardSegmentLayers.get(r.id)||[]).length,has=window.dashboardRoadLayers.has(r.id);return `<button type="button" class="dash-road-option" data-road-id="${esc(r.id)}" aria-pressed="false"><span class="dash-road-number">${i+1}</span><span class="dash-road-copy"><b>${esc([r.code,r.name].filter(Boolean).join(' · ')||'Camino sin nombre')}</b><small>${Number(r.length_m||r.official_length_m||r.geometry_length_m||0)>0?(Number(r.length_m||r.official_length_m||r.geometry_length_m)/1000).toLocaleString('es-CL',{maximumFractionDigits:2})+' km':'Longitud no informada'} · ${n} tramos geográficos${has?'':' · geometría no disponible'}</small></span><span class="dash-road-chevron">›</span></button>`}).join('')}`:'<div class="dash-empty-state">No hay caminos en este proyecto.</div>';list.querySelectorAll('[data-road-id]').forEach(btn=>btn.addEventListener('click',()=>selectDashboardRoad(btn.dataset.roadId)))}
  if(bounds.length){const all=bounds.reduce((a,b)=>a.extend(b));map.fitBounds(all.pad(.08),{maxZoom:13})}
  const status=$('#dashboardMapStatus');if(status)status.textContent=roadCount?`${roadCount} caminos trazados · ${(dashboardData.segmentGeometries||[]).length} tramos con geometría · ${incidentCount} incidencias activas ubicadas${dashboardData.geometryWarning?' · '+dashboardData.geometryWarning:''}. Selecciona un camino para resaltarlo en rojo.`:'No se pudo dibujar ninguna geometría de camino. '+(dashboardData.geometryWarning||'Comprueba roads.geom y la respuesta de geotracia_project_road_geometries.');
  setTimeout(()=>map.invalidateSize(),100);
