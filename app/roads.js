@@ -1,6 +1,6 @@
 (()=>{'use strict';
 const $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const S={org:null,projects:[],projectId:'',roads:[],segments:[],busy:false,error:'',editRoad:null,editSegment:null,pendingRoadSource:null,selectedRoadId:null,roadMap:null,roadLayers:{},roadGeometryRows:[],candidateLayer:null,routeDraft:null};
+const S={org:null,projects:[],projectId:'',roads:[],segments:[],busy:false,error:'',editRoad:null,editSegment:null,pendingRoadSource:null,selectedRoadId:null,roadMap:null,roadLayers:{},roadPreviewLayer:null,roadGeometryRows:[]};
 const sb=()=>window.geoSupabase, root=()=>$('#content');
 function toast(t){const e=$('#toast');if(e){e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),3500)}else alert(t)}
 function head(title,desc,actions=''){return `<div class="heading"><div><div class="eyebrow">GEOTRACIA / CAMINOS Y TRAMOS</div><h1>${title}</h1><p>${desc}</p></div><div class="actions">${actions}</div></div>`}
@@ -10,7 +10,7 @@ function fmt(v){return v===null||v===undefined||v===''?'—':String(v)}
 function km(v){return v===null||v===undefined||v===''?'—':Number(v).toLocaleString('es-CL',{minimumFractionDigits:3,maximumFractionDigits:3})}
 function roadAttr(r,key,fallback){return r?.[key]??r?.attributes?.[fallback]??null}
 function mapMarkup(){return `<section class="panel road-map-panel"><div class="panel-head"><div><h2>Cartografía del proyecto</h2><div class="sub">Todos los caminos del proyecto activo · selecciona una fila o un trazado</div></div><div class="actions"><button class="btn" type="button" data-road-action="show-all">Mostrar todos</button><button class="btn primary" type="button" data-road-action="rebuild-selected" title="Reconstruir la geometría del camino seleccionado">Reconstruir camino</button></div></div><div class="road-map-layout"><div id="geoProjectRoadMap" class="geo-project-road-map" aria-label="Mapa de caminos del proyecto"></div><aside class="road-map-side"><div class="road-map-summary"><span class="road-map-dot"></span><div><b id="roadMapSelectedTitle">Todos los caminos</b><small id="roadMapSelectedMeta">${S.roads.length} caminos cargados</small></div></div><div class="road-map-list">${S.roads.map(r=>`<button type="button" class="road-map-item ${S.selectedRoadId===r.id?'is-selected':''}" data-road-select="${r.id}"><span class="road-map-line"></span><span class="road-map-item-text"><b>${esc(r.code)}</b><small>${esc(r.name)}</small></span><span class="road-map-item-km">${r.length_m==null?'—':(Number(r.length_m)/1000).toLocaleString('es-CL',{maximumFractionDigits:2})+' km'}</span></button>`).join('')||'<div class="empty">No hay caminos en este proyecto.</div>'}</div></aside></div><div class="road-map-footnote">Los trazados se dibujan desde la geometría geográfica almacenada para cada camino. Si un registro no tiene geometría, seguirá apareciendo en la lista, pero no tendrá línea que seleccionar.</div></section>`}
-function initRoadMap(){const el=$('#geoProjectRoadMap');if(!el||!window.L)return;if(S.roadMap){S.roadMap.remove();S.roadMap=null;S.roadLayers={};S.candidateLayer=null}S.roadMap=L.map(el,{preferCanvas:true,zoomControl:true}).setView([-38.7359,-72.5904],9);if(navigator.onLine)L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(S.roadMap);else el.style.background='linear-gradient(0deg,#edf4f5 1px,transparent 1px),linear-gradient(90deg,#edf4f5 1px,transparent 1px)';const all=[];for(const row of S.roadGeometryRows){const road=S.roads.find(r=>r.id===row.road_id);if(!road||!row.geojson)continue;let gj=row.geojson;try{if(typeof gj==='string')gj=JSON.parse(gj);if(gj?.type==='Feature')gj=gj.geometry;if(!gj?.type||!gj.coordinates)continue;const layer=L.geoJSON(gj,{style:()=>roadStyle(road.id),onEachFeature:(_,ly)=>{ly.on('click',()=>selectRoad(road.id,true));ly.bindTooltip(`${esc(road.code)} · ${esc(road.name)}`)}});layer.addTo(S.roadMap);S.roadLayers[road.id]=layer;all.push(layer)}catch(e){console.warn('Geometría vial no interpretable',road.code,e)}}setTimeout(()=>{if(!S.roadMap)return;S.roadMap.invalidateSize();if(all.length){const group=L.featureGroup(all);S.roadMap.fitBounds(group.getBounds().pad(.08),{maxZoom:13})}refreshRoadMapStyles()},100)}
+function initRoadMap(){const el=$('#geoProjectRoadMap');if(!el||!window.L)return;if(S.roadMap){S.roadMap.remove();S.roadMap=null;S.roadLayers={}}S.roadMap=L.map(el,{preferCanvas:true,zoomControl:true}).setView([-38.7359,-72.5904],9);if(navigator.onLine)L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(S.roadMap);else el.style.background='linear-gradient(0deg,#edf4f5 1px,transparent 1px),linear-gradient(90deg,#edf4f5 1px,transparent 1px)';const all=[];for(const row of S.roadGeometryRows){const road=S.roads.find(r=>r.id===row.road_id);if(!road||!row.geojson)continue;let gj=row.geojson;try{if(typeof gj==='string')gj=JSON.parse(gj);if(gj?.type==='Feature')gj=gj.geometry;if(!gj?.type||!gj.coordinates)continue;const layer=L.geoJSON(gj,{style:()=>roadStyle(road.id),onEachFeature:(_,ly)=>{ly.on('click',()=>selectRoad(road.id,true));ly.bindTooltip(`${esc(road.code)} · ${esc(road.name)}`)}});layer.addTo(S.roadMap);S.roadLayers[road.id]=layer;all.push(layer)}catch(e){console.warn('Geometría vial no interpretable',road.code,e)}}setTimeout(()=>{if(!S.roadMap)return;S.roadMap.invalidateSize();if(all.length){const group=L.featureGroup(all);S.roadMap.fitBounds(group.getBounds().pad(.08),{maxZoom:13})}refreshRoadMapStyles()},100)}
 function roadStyle(id){const selected=S.selectedRoadId===id;return {color:selected?'#ef4444':'#1769ee',weight:selected?7:4,opacity:selected?1:.76,lineCap:'round',lineJoin:'round'}}
 function refreshRoadMapStyles(){Object.entries(S.roadLayers).forEach(([id,layer])=>layer.setStyle(roadStyle(id)));document.querySelectorAll('[data-road-select]').forEach(b=>b.classList.toggle('is-selected',b.dataset.roadSelect===S.selectedRoadId));const r=S.roads.find(x=>x.id===S.selectedRoadId);const t=$('#roadMapSelectedTitle'),m=$('#roadMapSelectedMeta');if(t)t.textContent=r?`${r.code} · ${r.name}`:'Todos los caminos';if(m)m.textContent=r?`${r.length_m==null?'Longitud no informada':(Number(r.length_m)/1000).toLocaleString('es-CL',{maximumFractionDigits:3})+' km'} · ${roadAttr(r,'road_role','institutional_road_role')||'Sin rol informado'}`:`${S.roads.length} caminos cargados`}
 function selectRoad(id,fromMap=false){S.selectedRoadId=id||null;refreshRoadMapStyles();if(!id){const ls=Object.values(S.roadLayers);if(ls.length&&S.roadMap){const g=L.featureGroup(ls);S.roadMap.fitBounds(g.getBounds().pad(.08),{maxZoom:13})}return}const layer=S.roadLayers[id];if(layer&&S.roadMap){const b=layer.getBounds();if(b.isValid())S.roadMap.fitBounds(b.pad(.12),{maxZoom:15});layer.openTooltip?.()}if(fromMap){const row=document.querySelector(`[data-road-select="${CSS.escape(id)}"]`);row?.scrollIntoView({block:'nearest',behavior:'smooth'})}}
@@ -79,83 +79,48 @@ const institutional={road_role:$('#grRoadRole').value.trim()||null,contracting_m
 let payload={organization_id:S.org.id,project_id:S.projectId,code:$('#grCode').value.trim(),name:$('#grName').value.trim(),road_type:$('#grType').value,surface_type:$('#grSurface').value,length_m:$('#grLength').value===''?null:Number($('#grLength').value),attributes:roadAttributes,...institutional};
 if(src){payload.data_source='osm';payload.source_id=sourceId;payload.geom=geometry;payload.attributes={...roadAttributes,source:'OSM / Geofabrik Chile',source_record_id:sourceId,source_geometry_type:src.geometry?.type||null};}
 let b=$('[data-road-action="save-road"]');if(b)b.disabled=true;try{let out;if(S.editRoad)out=await c.from('roads').update({code:payload.code,name:payload.name,road_type:payload.road_type,surface_type:payload.surface_type,length_m:payload.length_m,attributes:payload.attributes,road_role:payload.road_role,contracting_modality:payload.contracting_modality,road_network_type:payload.road_network_type,intervention_start_km:payload.intervention_start_km,intervention_end_km:payload.intervention_end_km,updated_at:new Date().toISOString()}).eq('id',S.editRoad).eq('organization_id',S.org.id).eq('project_id',S.projectId);else{let {data,error}=await c.auth.getUser();if(error)throw error;out=await c.from('roads').insert({...payload,created_by:data.user.id})}if(out.error)throw out.error;$('#dialog').close();S.pendingRoadSource=null;toast(S.editRoad?'Camino actualizado.':'Camino guardado en Supabase y asociado al proyecto.');if(window.__geotraciaRoadsActive)await load()}catch(e){toast(errMsg(e));if(b)b.disabled=false}}
-function geomEndpoints(geom){
- try{
-  if(typeof geom==='string')geom=JSON.parse(geom);
-  if(geom?.type==='Feature')geom=geom.geometry;
-  const coords=geom?.coordinates;
-  const flat=[];
-  const walk=x=>{if(!Array.isArray(x))return;if(typeof x[0]==='number'&&typeof x[1]==='number'){flat.push(x);return;}for(const y of x)walk(y)};
-  walk(coords);
-  return flat.length?{start:flat[0],end:flat[flat.length-1]}:null;
- }catch(_){return null}
-}
-function routeInputDialog(id){
- const road=S.roads.find(r=>r.id===id);if(!road)return;
- S.routeDraft={roadId:id,params:{p_road_id:id,p_apply:false}};
- const kmStart=roadAttr(road,'intervention_start_km','km_start');
- const kmEnd=roadAttr(road,'intervention_end_km','km_end');
- const target=road.official_length_m??road.length_m??(kmStart!=null&&kmEnd!=null?(Number(kmEnd)-Number(kmStart))*1000:null);
- dlg('Reconstrucción automática del camino',`<div class="form-grid">
- <div class="full note">La reconstrucción utiliza los datos ya guardados del camino: nombre, código, referencia vial, progresivas, longitud declarada y geometría existente como referencia espacial. No debes ingresar coordenadas. La primera ejecución genera solo una vista previa.</div>
- <div class="full"><b>${esc(road.code)} · ${esc(road.name)}</b></div>
- <div><b>Progresiva inicial</b><div>${km(kmStart)} km</div></div>
- <div><b>Progresiva final</b><div>${km(kmEnd)} km</div></div>
- <div><b>Longitud objetivo</b><div>${target==null?'No informada':km(target/1000)+' km'}</div></div>
- <div><b>Superficie</b><div>${esc(road.surface_type||'No informada')}</div></div>
- <div class="full sub">El motor buscará segmentos de la cartografía nacional dentro del corredor del trazado registrado, priorizará la identidad vial y calculará una ruta conectada. No guardará nada si no puede validar la candidata.</div>
- </div>`,`<button class="btn" data-close>Cerrar</button><button class="btn primary" data-road-action="route-preview">Reconstruir y revisar</button>`);
-}
-async function calculateRoute(apply){
- const draft=S.routeDraft;if(!draft?.roadId)throw Error('No hay un camino seleccionado.');
- const params={p_road_id:draft.roadId,p_apply:!!apply};
- const {data,error}=await sb().rpc('geotracia_rebuild_road_geometry_auto',params);if(error)throw error;
- return data;
-}
-async function previewRoute(){
- try{
-  toast('Reconstruyendo automáticamente desde los datos del camino…');
-  const result=await calculateRoute(false);
-  if(!result||typeof result!=='object')throw Error('Supabase devolvió una respuesta inesperada.');
-  if(!['preview','applied'].includes(result.status)||!result.geojson){
-   dlg('No se pudo reconstruir la ruta',`<div class="form-grid"><div class="full note">${esc(result.message||result.status||'No se encontró una ruta válida a partir de los datos del camino.')}</div><div><b>Segmentos candidatos</b><div>${Number(result.candidate_edges||0)}</div></div><div><b>Ajuste inicio / término</b><div>${km(result.start_snap_m)} m / ${km(result.end_snap_m)} m</div></div><div class="full sub">No se modificó la geometría guardada. Revisa la geometría, la referencia vial y las progresivas del registro antes de volver a intentar.</div></div>`,`<button class="btn" data-close>Cerrar</button><button class="btn primary" data-road-action="route-back">Volver a coordenadas</button>`);
-   return;
-  }
-  S.routeDraft.result=result;
-  if(S.roadMap&&window.L){
-   if(S.candidateLayer)S.roadMap.removeLayer(S.candidateLayer);
-   S.candidateLayer=L.geoJSON(result.geojson,{style:{color:'#7c3aed',weight:7,opacity:1,dashArray:'10 7',lineCap:'round',lineJoin:'round'}}).addTo(S.roadMap);
-   const b=S.candidateLayer.getBounds();if(b.isValid())S.roadMap.fitBounds(b.pad(.12),{maxZoom:14});
-  }
-  const road=S.roads.find(r=>r.id===S.routeDraft.roadId);
-  dlg('Vista previa de reconstrucción',`<div class="form-grid"><div class="full note">La ruta candidata se muestra en color violeta sobre el mapa. Comprueba que sigue el camino correcto antes de guardarla.</div><div class="full"><b>Camino</b><div>${esc(road?.code||'')} · ${esc(road?.name||'')}</div></div><div><b>Aristas de la ruta</b><div>${Number(result.path_edges||0)}</div></div><div><b>Longitud calculada</b><div>${km(result.length_m)} m (${km(result.length_km)} km)</div></div><div><b>Progresiva inicial</b><div>${km(road?.intervention_start_km??road?.attributes?.km_start)} km</div></div><div><b>Progresiva final</b><div>${km(road?.intervention_end_km??road?.attributes?.km_end)} km</div></div><div class="full sub">La geometría almacenada sigue intacta. La longitud oficial/declarada no se cambia.</div></div>`,`<button class="btn" data-close>Cerrar</button><button class="btn primary" data-road-action="route-apply">Validar y guardar</button>`);
- }catch(e){console.error('[GEOTRACIA] Vista previa de ruta fallida',e);toast('No se pudo calcular la ruta: '+errMsg(e))}
-}
-async function applyRoute(){
- try{
-  if(!S.routeDraft?.result?.geojson){toast('Primero calcula y revisa la vista previa.');return}
-  const ok=confirm('¿Guardar esta ruta reconstruida? Revisa que el trazado violeta corresponda al camino correcto. La geometría actual se reemplazará.');
-  if(!ok)return;
-  toast('Validando y guardando la ruta…');
-  const result=await calculateRoute(true);
-  if(result?.status==='applied'){
-   if(S.candidateLayer&&S.roadMap){S.roadMap.removeLayer(S.candidateLayer);S.candidateLayer=null}
-   $('#dialog')?.close();toast('Ruta reconstruida y guardada. Actualizando mapa…');await load();
-  }else{
-   dlg('Ruta no guardada',`<div class="note">${esc(result?.message||'La validación no permitió guardar la ruta.')}</div>`,`<button class="btn" data-close>Cerrar</button>`);
-  }
- }catch(e){console.error('[GEOTRACIA] Aplicación de ruta fallida',e);toast('No se pudo guardar la ruta: '+errMsg(e))}
-}
 async function rebuildRoadGeometry(id){
  const road=S.roads.find(r=>r.id===id);if(!road)return;
- routeInputDialog(id);
+ const c=sb();if(!c)return toast('Supabase no está disponible.');
+ try{
+  toast('Reconstruyendo desde el registro y la cartografía nacional…');
+  const {data:preview,error}=await c.rpc('geotracia_rebuild_road_geometry_auto',{p_road_id:id,p_apply:false});
+  if(error)throw error;
+  if(!preview||typeof preview!=='object')throw Error('Supabase devolvió una respuesta inesperada.');
+  const length=Number(preview.length_m||preview.geometry_length_m||0),target=Number(preview.target_length_m||0),segments=Number(preview.path_edges||preview.segment_count||0);
+  if(preview.geojson){
+   try{
+    let gj=preview.geojson;if(typeof gj==='string')gj=JSON.parse(gj);if(gj.type==='Feature')gj=gj.geometry;
+    if(gj?.type&&gj.coordinates&&window.L&&S.roadMap){
+     if(S.roadPreviewLayer){S.roadMap.removeLayer(S.roadPreviewLayer);S.roadPreviewLayer=null;}
+     S.roadPreviewLayer=L.geoJSON(gj,{style:{color:'#8b5cf6',weight:7,opacity:1,dashArray:'8 6'}}).addTo(S.roadMap);
+     S.roadMap.fitBounds(S.roadPreviewLayer.getBounds().pad(.12),{maxZoom:14});
+    }
+   }catch(drawError){console.warn('No se pudo dibujar la vista previa',drawError)}
+  }
+  if(preview.status!=='preview'){
+   const details=preview.message||'La ruta requiere revisión.';
+   dlg('Reconstrucción automática no completada',`<div class="form-grid"><div class="full note">${esc(details)}</div><div><b>Camino</b><div>${esc(road.code)} · ${esc(road.name)}</div></div><div><b>Segmentos de ruta</b><div>${segments}</div></div><div><b>Segmentos candidatos</b><div>${Number(preview.candidate_edges||0)}</div></div><div><b>Longitud candidata</b><div>${length?km(length)+' m':'No calculada'}</div></div><div><b>Longitud declarada/progresivas</b><div>${target?km(target)+' m':'No informada'}</div></div><div class="full sub">La geometría guardada no se modificó. Corrige la cartografía o las referencias del registro si la red no permite conectar la ruta.</div></div>`,`<button class="btn" data-close>Cerrar</button>`);
+   return;
+  }
+  const message=`Vista previa de reconstrucción automática\n\nCamino: ${road.code} · ${road.name}\nAristas de la ruta: ${segments}\nLongitud candidata: ${length.toLocaleString('es-CL',{maximumFractionDigits:2})} m\nLongitud declarada/progresivas: ${target?target.toLocaleString('es-CL')+' m':'no informada'}\n\n¿Guardar esta geometría?`;
+  if(!confirm(message))return;
+  const {data:saved,error:saveError}=await c.rpc('geotracia_rebuild_road_geometry_auto',{p_road_id:id,p_apply:true});
+  if(saveError)throw saveError;
+  if(saved?.status==='applied'){
+   if(S.roadPreviewLayer&&S.roadMap){S.roadMap.removeLayer(S.roadPreviewLayer);S.roadPreviewLayer=null;}
+   toast('Geometría reconstruida y guardada. Actualizando mapa…');await load();
+  }else{
+   dlg('Reconstrucción no aplicada',`<div class="note">${esc(saved?.message||'La validación final no permitió guardar la geometría.')}</div>`,`<button class="btn" data-close>Cerrar</button>`);
+  }
+ }catch(e){console.error('[GEOTRACIA] Reconstrucción automática fallida',e);dlg('Error de reconstrucción',`<div class="note">${esc(errMsg(e))}</div>`,`<button class="btn" data-close>Cerrar</button>`);}
 }
 async function saveSegment(){let f=$('#geoSegmentForm');if(!f.reportValidity())return;let start=Number($('#gsStart').value),end=Number($('#gsEnd').value);if(end<=start){toast('La progresiva final debe ser mayor que la inicial.');return}let c=sb(),payload={organization_id:S.org.id,project_id:S.projectId,road_id:$('#gsRoad').value,code:$('#gsCode').value.trim(),start_km:start,end_km:end,condition:$('#gsCondition').value};let b=$('[data-road-action="save-segment"]');b.disabled=true;try{let out;if(S.editSegment)out=await c.from('segments').update({road_id:payload.road_id,code:payload.code,start_km:start,end_km:end,condition:payload.condition,updated_at:new Date().toISOString()}).eq('id',S.editSegment).eq('organization_id',S.org.id).eq('project_id',S.projectId);else{let {data,error}=await c.auth.getUser();if(error)throw error;out=await c.from('segments').insert({...payload,created_by:data.user.id})}if(out.error)throw out.error;$('#dialog').close();toast(S.editSegment?'Tramo actualizado.':'Tramo guardado en Supabase.');await load()}catch(e){toast(errMsg(e));b.disabled=false}}
 async function delRoad(id){let r=S.roads.find(x=>x.id===id);if(!r||!confirm(`¿Eliminar ${r.code} y sus tramos asociados? Esta acción no se puede deshacer.`))return;try{let {error}=await sb().from('roads').delete().eq('id',id).eq('organization_id',S.org.id).eq('project_id',S.projectId);if(error)throw error;toast('Camino eliminado.');await load()}catch(e){toast(errMsg(e))}}
 async function delSegment(id){let s=S.segments.find(x=>x.id===id);if(!s||!confirm(`¿Eliminar el tramo ${s.code}? Esta acción no se puede deshacer.`))return;try{let {error}=await sb().from('segments').delete().eq('id',id).eq('organization_id',S.org.id).eq('project_id',S.projectId);if(error)throw error;toast('Tramo eliminado.');await load()}catch(e){toast(errMsg(e))}}
 function activate(){window.__geotraciaRoadsActive=true;document.body.classList.add('geo-roads-view');document.querySelectorAll('[data-go]').forEach(x=>x.classList.toggle('active',x.dataset.go==='caminos'));load()}
 function deactivate(){window.__geotraciaRoadsActive=false;document.body.classList.remove('geo-roads-view')}
-document.addEventListener('click',e=>{let n=e.target.closest('[data-go="caminos"]');if(n){e.preventDefault();e.stopImmediatePropagation();activate();return}let sel=e.target.closest('[data-road-select]');if(sel&&!e.target.closest('[data-road-edit],[data-road-segments],[data-road-delete],[data-road-rebuild]')){e.preventDefault();e.stopImmediatePropagation();selectRoad(sel.dataset.roadSelect,true);return}let a=e.target.closest('[data-road-action]');if(a){e.preventDefault();e.stopImmediatePropagation();switch(a.dataset.roadAction){case'reload':load();break;case'show-all':selectRoad(null);break;case'rebuild-selected':if(S.selectedRoadId)rebuildRoadGeometry(S.selectedRoadId);else toast('Selecciona primero un camino en el mapa o en la tabla.');break;case'route-preview':previewRoute();break;case'route-apply':applyRoute();break;case'route-back':if(S.routeDraft?.roadId)routeInputDialog(S.routeDraft.roadId);break;case'new-road':roadDialog();break;case'save-road':saveRoad();break;case'new-segment':segmentDialog();break;case'save-segment':saveSegment();break}return}let rebuild=e.target.closest('[data-road-rebuild]');if(rebuild){e.preventDefault();e.stopImmediatePropagation();rebuildRoadGeometry(rebuild.dataset.roadRebuild);return}let x=e.target.closest('[data-road-edit]');if(x){e.preventDefault();e.stopImmediatePropagation();roadDialog(S.roads.find(r=>r.id===x.dataset.roadEdit));return}x=e.target.closest('[data-road-segments]');if(x){e.preventDefault();e.stopImmediatePropagation();segmentDialog(null,x.dataset.roadSegments);return}x=e.target.closest('[data-road-delete]');if(x){e.preventDefault();e.stopImmediatePropagation();delRoad(x.dataset.roadDelete);return}x=e.target.closest('[data-segment-edit]');if(x){e.preventDefault();e.stopImmediatePropagation();segmentDialog(S.segments.find(s=>s.id===x.dataset.segmentEdit));return}x=e.target.closest('[data-segment-delete]');if(x){e.preventDefault();e.stopImmediatePropagation();delSegment(x.dataset.segmentDelete);return}let nav=e.target.closest('[data-go]');if(nav&&nav.dataset.go!=='caminos')deactivate()},true);
+document.addEventListener('click',e=>{let n=e.target.closest('[data-go="caminos"]');if(n){e.preventDefault();e.stopImmediatePropagation();activate();return}let sel=e.target.closest('[data-road-select]');if(sel&&!e.target.closest('[data-road-edit],[data-road-segments],[data-road-delete],[data-road-rebuild]')){e.preventDefault();e.stopImmediatePropagation();selectRoad(sel.dataset.roadSelect,true);return}let a=e.target.closest('[data-road-action]');if(a){e.preventDefault();e.stopImmediatePropagation();switch(a.dataset.roadAction){case'reload':load();break;case'show-all':selectRoad(null);break;case'rebuild-selected':if(S.selectedRoadId)rebuildRoadGeometry(S.selectedRoadId);else toast('Selecciona primero un camino en el mapa o en la tabla.');break;case'new-road':roadDialog();break;case'save-road':saveRoad();break;case'new-segment':segmentDialog();break;case'save-segment':saveSegment();break}return}let rebuild=e.target.closest('[data-road-rebuild]');if(rebuild){e.preventDefault();e.stopImmediatePropagation();rebuildRoadGeometry(rebuild.dataset.roadRebuild);return}let x=e.target.closest('[data-road-edit]');if(x){e.preventDefault();e.stopImmediatePropagation();roadDialog(S.roads.find(r=>r.id===x.dataset.roadEdit));return}x=e.target.closest('[data-road-segments]');if(x){e.preventDefault();e.stopImmediatePropagation();segmentDialog(null,x.dataset.roadSegments);return}x=e.target.closest('[data-road-delete]');if(x){e.preventDefault();e.stopImmediatePropagation();delRoad(x.dataset.roadDelete);return}x=e.target.closest('[data-segment-edit]');if(x){e.preventDefault();e.stopImmediatePropagation();segmentDialog(S.segments.find(s=>s.id===x.dataset.segmentEdit));return}x=e.target.closest('[data-segment-delete]');if(x){e.preventDefault();e.stopImmediatePropagation();delSegment(x.dataset.segmentDelete);return}let nav=e.target.closest('[data-go]');if(nav&&nav.dataset.go!=='caminos')deactivate()},true);
 document.addEventListener('change',e=>{if(e.target.id==='roadProject'){S.projectId=e.target.value;load()}},true);window.addEventListener('geotracia:rvi-add-road',async event=>{try{await ensureRoadContext();const source=event.detail?.road;if(!source){toast('No se recibieron datos de la vía seleccionada.');return;}roadDialog(null,source);}catch(error){toast(errMsg(error));}});
 window.addEventListener('geotracia:session',()=>{if(window.__geotraciaRoadsActive)load()});if(location.hash==='#caminos')activate();
 })();
