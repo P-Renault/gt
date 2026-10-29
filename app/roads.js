@@ -109,7 +109,7 @@ async function rebuildRoadGeometry(id){
       let anchor=preview.start_anchor;if(typeof anchor==='string')anchor=JSON.parse(anchor);if(anchor.type==='Feature')anchor=anchor.geometry;
       if(anchor?.type==='Point'&&Array.isArray(anchor.coordinates)){
        const marker=L.circleMarker([anchor.coordinates[1],anchor.coordinates[0]],{radius:7,color:'#ffffff',weight:3,fillColor:'#16a34a',fillOpacity:1});
-       marker.bindTooltip('Inicio inferido · validar con Operaciones');
+       marker.bindTooltip('Inicio anclado al punto inicial del registro');
        previewLayers.push(marker);
       }
      }
@@ -119,7 +119,7 @@ async function rebuildRoadGeometry(id){
    }catch(drawError){console.warn('No se pudo dibujar la vista previa',drawError)}
   }
   if(preview.status!=='preview'){
-   const details=(preview.message||'La ruta requiere revisión.')+(preview.geojson?' La candidata rechazada se muestra en naranja para comparar dónde se interrumpe o desvía.':'');
+   const details=(preview.message||'La ruta requiere revisión.')+(preview.geojson?' La candidata rechazada se muestra en naranja. El sistema no guardará trazados que se desvíen más de 3 % de la longitud operacional declarada.':'');
    dlg('Reconstrucción automática no completada',`<div class="form-grid"><div class="full note">${esc(details)}</div><div><b>Camino</b><div>${esc(road.code)} · ${esc(road.name)}</div></div><div><b>Segmentos de ruta</b><div>${segments}</div></div><div><b>Segmentos candidatos</b><div>${Number(preview.candidate_edges||0)}</div></div><div><b>Longitud candidata</b><div>${length?km(length)+' m':'No calculada'}</div></div><div><b>Longitud declarada/progresivas</b><div>${target?km(target)+' m':'No informada'}</div></div><div class="full sub">La geometría guardada no se modificó. Corrige la cartografía o las referencias del registro si la red no permite conectar la ruta.</div></div>`,`<button class="btn" data-close>Cerrar</button>`);
    return;
   }
