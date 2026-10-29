@@ -94,7 +94,17 @@ async function rebuildRoadGeometry(id){
     let gj=preview.geojson;if(typeof gj==='string')gj=JSON.parse(gj);if(gj.type==='Feature')gj=gj.geometry;
     if(gj?.type&&gj.coordinates&&window.L&&S.roadMap){
      if(S.roadPreviewLayer){S.roadMap.removeLayer(S.roadPreviewLayer);S.roadPreviewLayer=null;}
-     S.roadPreviewLayer=L.geoJSON(gj,{style:{color:'#8b5cf6',weight:7,opacity:1,dashArray:'8 6'}}).addTo(S.roadMap);
+     const routeLayer=L.geoJSON(gj,{style:{color:'#8b5cf6',weight:7,opacity:1,dashArray:'8 6'}});
+     const previewLayers=[routeLayer];
+     if(preview.start_anchor){
+      let anchor=preview.start_anchor;if(typeof anchor==='string')anchor=JSON.parse(anchor);if(anchor.type==='Feature')anchor=anchor.geometry;
+      if(anchor?.type==='Point'&&Array.isArray(anchor.coordinates)){
+       const marker=L.circleMarker([anchor.coordinates[1],anchor.coordinates[0]],{radius:7,color:'#ffffff',weight:3,fillColor:'#16a34a',fillOpacity:1});
+       marker.bindTooltip('Inicio operativo inferido');
+       previewLayers.push(marker);
+      }
+     }
+     S.roadPreviewLayer=L.featureGroup(previewLayers).addTo(S.roadMap);
      S.roadMap.fitBounds(S.roadPreviewLayer.getBounds().pad(.12),{maxZoom:14});
     }
    }catch(drawError){console.warn('No se pudo dibujar la vista previa',drawError)}
