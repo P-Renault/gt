@@ -91,8 +91,8 @@ async function rebuildRoadGeometry(id){
   if(error)throw error;
   if(!preview||typeof preview!=='object')throw Error('Supabase devolvió una respuesta inesperada.');
   const length=Number(preview.length_m||preview.geometry_length_m||0),target=Number(preview.target_length_m||0),segments=Number(preview.path_edges||preview.segment_count||0);
-  // No dibujar geometrías de error como si fueran una ruta válida.
-  if(preview.status==='preview' && preview.geojson){
+  // Mostrar también candidatas rechazadas, diferenciadas en naranja; nunca confundirlas con una ruta validada.
+  if(preview.geojson && ['preview','length_mismatch','route_requires_review','invalid_route'].includes(preview.status)){
    try{
     let gj=preview.geojson;if(typeof gj==='string')gj=JSON.parse(gj);if(gj.type==='Feature')gj=gj.geometry;
     if(gj?.type&&gj.coordinates&&window.L&&S.roadMap){
@@ -101,13 +101,15 @@ async function rebuildRoadGeometry(id){
      // evita que parezca que la candidata y la geometría antigua son una sola.
      hiddenBaseLayer=S.roadLayers[id]||null;
      if(hiddenBaseLayer&&S.roadMap.hasLayer(hiddenBaseLayer))S.roadMap.removeLayer(hiddenBaseLayer);
-     const routeLayer=L.geoJSON(gj,{style:{color:'#8b5cf6',weight:7,opacity:1,dashArray:'8 6'}});
+     const isValidated=preview.status==='preview';
+     const routeLayer=L.geoJSON(gj,{style:{color:isValidated?'#8b5cf6':'#f97316',weight:7,opacity:1,dashArray:isValidated?'8 6':'5 8'}});
+     routeLayer.bindTooltip(isValidated?'Ruta candidata validada':'Candidata rechazada · no guardada');
      const previewLayers=[routeLayer];
      if(preview.start_anchor){
       let anchor=preview.start_anchor;if(typeof anchor==='string')anchor=JSON.parse(anchor);if(anchor.type==='Feature')anchor=anchor.geometry;
       if(anchor?.type==='Point'&&Array.isArray(anchor.coordinates)){
        const marker=L.circleMarker([anchor.coordinates[1],anchor.coordinates[0]],{radius:7,color:'#ffffff',weight:3,fillColor:'#16a34a',fillOpacity:1});
-       marker.bindTooltip('Inicio operativo inferido');
+       marker.bindTooltip('Inicio inferido · validar con Operaciones');
        previewLayers.push(marker);
       }
      }
@@ -117,7 +119,7 @@ async function rebuildRoadGeometry(id){
    }catch(drawError){console.warn('No se pudo dibujar la vista previa',drawError)}
   }
   if(preview.status!=='preview'){
-   const details=preview.message||'La ruta requiere revisión.';
+   const details=(preview.message||'La ruta requiere revisión.')+(preview.geojson?' La candidata rechazada se muestra en naranja para comparar dónde se interrumpe o desvía.':'');
    dlg('Reconstrucción automática no completada',`<div class="form-grid"><div class="full note">${esc(details)}</div><div><b>Camino</b><div>${esc(road.code)} · ${esc(road.name)}</div></div><div><b>Segmentos de ruta</b><div>${segments}</div></div><div><b>Segmentos candidatos</b><div>${Number(preview.candidate_edges||0)}</div></div><div><b>Longitud candidata</b><div>${length?km(length)+' m':'No calculada'}</div></div><div><b>Longitud declarada/progresivas</b><div>${target?km(target)+' m':'No informada'}</div></div><div class="full sub">La geometría guardada no se modificó. Corrige la cartografía o las referencias del registro si la red no permite conectar la ruta.</div></div>`,`<button class="btn" data-close>Cerrar</button>`);
    return;
   }
