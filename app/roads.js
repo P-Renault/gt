@@ -92,39 +92,33 @@ function geomEndpoints(geom){
 }
 function routeInputDialog(id){
  const road=S.roads.find(r=>r.id===id);if(!road)return;
- const ep=geomEndpoints(road.geom)||geomEndpoints(S.roadGeometryRows.find(x=>x.road_id===id)?.geojson);
- const saved=S.routeDraft?.roadId===id?S.routeDraft.params:null;
- const a=saved?[saved.p_start_lon,saved.p_start_lat]:(ep?.start||['','']);
- const b=saved?[saved.p_end_lon,saved.p_end_lat]:(ep?.end||['','']);
- const corridor=saved?.p_corridor_m||3000, maxSnap=saved?.p_max_snap_m||250;
- S.routeDraft={...(S.routeDraft?.roadId===id?S.routeDraft:{}),roadId:id};
- dlg('Reconstruir camino entre dos puntos',`<div class="form-grid">
- <div class="full note">Indica las coordenadas reales de inicio y término. Se propone la geometría guardada como referencia inicial; corrige los puntos si sus extremos actuales son incorrectos. La primera ejecución solo genera una vista previa.</div>
+ S.routeDraft={roadId:id,params:{p_road_id:id,p_apply:false}};
+ const kmStart=roadAttr(road,'intervention_start_km','km_start');
+ const kmEnd=roadAttr(road,'intervention_end_km','km_end');
+ const target=road.official_length_m??road.length_m??(kmStart!=null&&kmEnd!=null?(Number(kmEnd)-Number(kmStart))*1000:null);
+ dlg('Reconstrucción automática del camino',`<div class="form-grid">
+ <div class="full note">La reconstrucción utiliza los datos ya guardados del camino: nombre, código, referencia vial, progresivas, longitud declarada y geometría existente como referencia espacial. No debes ingresar coordenadas. La primera ejecución genera solo una vista previa.</div>
  <div class="full"><b>${esc(road.code)} · ${esc(road.name)}</b></div>
- ${field('Longitud de inicio (longitud / lon)','routeStartLon',a[0],'Ej. -72.2212539','number','step="any" required')}
- ${field('Latitud de inicio','routeStartLat',a[1],'Ej. -39.2805995','number','step="any" required')}
- ${field('Longitud de término (lon)','routeEndLon',b[0],'Ej. -71.9960685','number','step="any" required')}
- ${field('Latitud de término','routeEndLat',b[1],'Ej. -39.2713015','number','step="any" required')}
- ${field('Ancho del corredor (m)','routeCorridor',corridor,'3000','number','min="50" max="20000" step="100" required')}
- <div><label class="field-label" for="routeMaxSnap">Máxima distancia a la red (m)</label><input class="field" id="routeMaxSnap" type="number" min="5" max="2000" step="5" value="${maxSnap}" required></div>
- </div>`,`<button class="btn" data-close>Cerrar</button><button class="btn primary" data-road-action="route-preview">Calcular vista previa</button>`);
+ <div><b>Progresiva inicial</b><div>${km(kmStart)} km</div></div>
+ <div><b>Progresiva final</b><div>${km(kmEnd)} km</div></div>
+ <div><b>Longitud objetivo</b><div>${target==null?'No informada':km(target/1000)+' km'}</div></div>
+ <div><b>Superficie</b><div>${esc(road.surface_type||'No informada')}</div></div>
+ <div class="full sub">El motor buscará segmentos de la cartografía nacional dentro del corredor del trazado registrado, priorizará la identidad vial y calculará una ruta conectada. No guardará nada si no puede validar la candidata.</div>
+ </div>`,`<button class="btn" data-close>Cerrar</button><button class="btn primary" data-road-action="route-preview">Reconstruir y revisar</button>`);
 }
 async function calculateRoute(apply){
  const draft=S.routeDraft;if(!draft?.roadId)throw Error('No hay un camino seleccionado.');
- const val=id=>{const raw=$(id)?.value;if(raw===null||raw===undefined||String(raw).trim()==='')throw Error('Completa las cuatro coordenadas con números válidos.');const n=Number(raw);if(!Number.isFinite(n))throw Error('Completa las cuatro coordenadas con números válidos.');return n};
- const params=apply&&draft.params?{...draft.params,p_apply:true}:{p_road_id:draft.roadId,p_start_lon:val('#routeStartLon'),p_start_lat:val('#routeStartLat'),p_end_lon:val('#routeEndLon'),p_end_lat:val('#routeEndLat'),p_apply:apply,p_corridor_m:Number($('#routeCorridor')?.value||3000),p_node_snap_m:2,p_max_snap_m:Number($('#routeMaxSnap')?.value||250),p_max_edges:20000};
- if(params.p_start_lon < -180 || params.p_start_lon > 180 || params.p_end_lon < -180 || params.p_end_lon > 180 || params.p_start_lat < -90 || params.p_start_lat > 90 || params.p_end_lat < -90 || params.p_end_lat > 90)throw Error('Las coordenadas están fuera de rango.');
- if(!apply)draft.params=params;
- const {data,error}=await sb().rpc('geotracia_rebuild_route_between_points',params);if(error)throw error;
+ const params={p_road_id:draft.roadId,p_apply:!!apply};
+ const {data,error}=await sb().rpc('geotracia_rebuild_road_geometry_auto',params);if(error)throw error;
  return data;
 }
 async function previewRoute(){
  try{
-  toast('Calculando ruta candidata entre los puntos…');
+  toast('Reconstruyendo automáticamente desde los datos del camino…');
   const result=await calculateRoute(false);
   if(!result||typeof result!=='object')throw Error('Supabase devolvió una respuesta inesperada.');
   if(!['preview','applied'].includes(result.status)||!result.geojson){
-   dlg('No se pudo reconstruir la ruta',`<div class="form-grid"><div class="full note">${esc(result.message||result.status||'No se encontró una ruta válida.')}</div><div><b>Segmentos candidatos</b><div>${Number(result.candidate_edges||0)}</div></div><div><b>Ajuste inicio / término</b><div>${km(result.start_snap_m)} m / ${km(result.end_snap_m)} m</div></div><div class="full sub">No se modificó la geometría guardada. Ajusta las coordenadas o amplía el corredor y vuelve a calcular.</div></div>`,`<button class="btn" data-close>Cerrar</button><button class="btn primary" data-road-action="route-back">Volver a coordenadas</button>`);
+   dlg('No se pudo reconstruir la ruta',`<div class="form-grid"><div class="full note">${esc(result.message||result.status||'No se encontró una ruta válida a partir de los datos del camino.')}</div><div><b>Segmentos candidatos</b><div>${Number(result.candidate_edges||0)}</div></div><div><b>Ajuste inicio / término</b><div>${km(result.start_snap_m)} m / ${km(result.end_snap_m)} m</div></div><div class="full sub">No se modificó la geometría guardada. Revisa la geometría, la referencia vial y las progresivas del registro antes de volver a intentar.</div></div>`,`<button class="btn" data-close>Cerrar</button><button class="btn primary" data-road-action="route-back">Volver a coordenadas</button>`);
    return;
   }
   S.routeDraft.result=result;
@@ -134,7 +128,7 @@ async function previewRoute(){
    const b=S.candidateLayer.getBounds();if(b.isValid())S.roadMap.fitBounds(b.pad(.12),{maxZoom:14});
   }
   const road=S.roads.find(r=>r.id===S.routeDraft.roadId);
-  dlg('Vista previa de reconstrucción',`<div class="form-grid"><div class="full note">La ruta candidata se muestra en color violeta sobre el mapa. Comprueba que sigue el camino correcto antes de guardarla.</div><div class="full"><b>Camino</b><div>${esc(road?.code||'')} · ${esc(road?.name||'')}</div></div><div><b>Aristas de la ruta</b><div>${Number(result.path_edges||0)}</div></div><div><b>Longitud calculada</b><div>${km(result.length_m)} m (${km(result.length_km)} km)</div></div><div><b>Ajuste del inicio</b><div>${km(result.start_snap_m)} m</div></div><div><b>Ajuste del término</b><div>${km(result.end_snap_m)} m</div></div><div class="full sub">La geometría almacenada sigue intacta. La longitud oficial/declarada no se cambia.</div></div>`,`<button class="btn" data-close>Cerrar</button><button class="btn" data-road-action="route-back">Cambiar puntos</button><button class="btn primary" data-road-action="route-apply">Validar y guardar</button>`);
+  dlg('Vista previa de reconstrucción',`<div class="form-grid"><div class="full note">La ruta candidata se muestra en color violeta sobre el mapa. Comprueba que sigue el camino correcto antes de guardarla.</div><div class="full"><b>Camino</b><div>${esc(road?.code||'')} · ${esc(road?.name||'')}</div></div><div><b>Aristas de la ruta</b><div>${Number(result.path_edges||0)}</div></div><div><b>Longitud calculada</b><div>${km(result.length_m)} m (${km(result.length_km)} km)</div></div><div><b>Progresiva inicial</b><div>${km(road?.intervention_start_km??road?.attributes?.km_start)} km</div></div><div><b>Progresiva final</b><div>${km(road?.intervention_end_km??road?.attributes?.km_end)} km</div></div><div class="full sub">La geometría almacenada sigue intacta. La longitud oficial/declarada no se cambia.</div></div>`,`<button class="btn" data-close>Cerrar</button><button class="btn primary" data-road-action="route-apply">Validar y guardar</button>`);
  }catch(e){console.error('[GEOTRACIA] Vista previa de ruta fallida',e);toast('No se pudo calcular la ruta: '+errMsg(e))}
 }
 async function applyRoute(){
