@@ -81,6 +81,8 @@ if(src){payload.data_source='osm';payload.source_id=sourceId;payload.geom=geomet
 let b=$('[data-road-action="save-road"]');if(b)b.disabled=true;try{let out;if(S.editRoad)out=await c.from('roads').update({code:payload.code,name:payload.name,road_type:payload.road_type,surface_type:payload.surface_type,length_m:payload.length_m,attributes:payload.attributes,road_role:payload.road_role,contracting_modality:payload.contracting_modality,road_network_type:payload.road_network_type,intervention_start_km:payload.intervention_start_km,intervention_end_km:payload.intervention_end_km,updated_at:new Date().toISOString()}).eq('id',S.editRoad).eq('organization_id',S.org.id).eq('project_id',S.projectId);else{let {data,error}=await c.auth.getUser();if(error)throw error;out=await c.from('roads').insert({...payload,created_by:data.user.id})}if(out.error)throw out.error;$('#dialog').close();S.pendingRoadSource=null;toast(S.editRoad?'Camino actualizado.':'Camino guardado en Supabase y asociado al proyecto.');if(window.__geotraciaRoadsActive)await load()}catch(e){toast(errMsg(e));if(b)b.disabled=false}}
 async function rebuildRoadGeometry(id){
  const road=S.roads.find(r=>r.id===id);if(!road)return;
+ let hiddenBaseLayer=null;
+ const restoreBaseLayer=()=>{if(hiddenBaseLayer&&S.roadMap&&!S.roadMap.hasLayer(hiddenBaseLayer))hiddenBaseLayer.addTo(S.roadMap);hiddenBaseLayer=null;};
  const c=sb();if(!c)return toast('Supabase no está disponible.');
  if(S.roadPreviewLayer&&S.roadMap){S.roadMap.removeLayer(S.roadPreviewLayer);S.roadPreviewLayer=null;}
  try{
@@ -89,11 +91,16 @@ async function rebuildRoadGeometry(id){
   if(error)throw error;
   if(!preview||typeof preview!=='object')throw Error('Supabase devolvió una respuesta inesperada.');
   const length=Number(preview.length_m||preview.geometry_length_m||0),target=Number(preview.target_length_m||0),segments=Number(preview.path_edges||preview.segment_count||0);
-  if(preview.geojson){
+  // No dibujar geometrías de error como si fueran una ruta válida.
+  if(preview.status==='preview' && preview.geojson){
    try{
     let gj=preview.geojson;if(typeof gj==='string')gj=JSON.parse(gj);if(gj.type==='Feature')gj=gj.geometry;
     if(gj?.type&&gj.coordinates&&window.L&&S.roadMap){
      if(S.roadPreviewLayer){S.roadMap.removeLayer(S.roadPreviewLayer);S.roadPreviewLayer=null;}
+     // Ocultar temporalmente el trazado guardado del camino seleccionado:
+     // evita que parezca que la candidata y la geometría antigua son una sola.
+     hiddenBaseLayer=S.roadLayers[id]||null;
+     if(hiddenBaseLayer&&S.roadMap.hasLayer(hiddenBaseLayer))S.roadMap.removeLayer(hiddenBaseLayer);
      const routeLayer=L.geoJSON(gj,{style:{color:'#8b5cf6',weight:7,opacity:1,dashArray:'8 6'}});
      const previewLayers=[routeLayer];
      if(preview.start_anchor){
@@ -115,16 +122,17 @@ async function rebuildRoadGeometry(id){
    return;
   }
   const message=`Vista previa de reconstrucción automática\n\nCamino: ${road.code} · ${road.name}\nAristas de la ruta: ${segments}\nLongitud candidata: ${length.toLocaleString('es-CL',{maximumFractionDigits:2})} m\nLongitud declarada/progresivas: ${target?target.toLocaleString('es-CL')+' m':'no informada'}\n\n¿Guardar esta geometría?`;
-  if(!confirm(message))return;
+  if(!confirm(message)){restoreBaseLayer();if(S.roadPreviewLayer&&S.roadMap){S.roadMap.removeLayer(S.roadPreviewLayer);S.roadPreviewLayer=null;}return;}
   const {data:saved,error:saveError}=await c.rpc('geotracia_rebuild_road_geometry_auto',{p_road_id:id,p_apply:true});
   if(saveError)throw saveError;
   if(saved?.status==='applied'){
    if(S.roadPreviewLayer&&S.roadMap){S.roadMap.removeLayer(S.roadPreviewLayer);S.roadPreviewLayer=null;}
    toast('Geometría reconstruida y guardada. Actualizando mapa…');await load();
   }else{
+   restoreBaseLayer();
    dlg('Reconstrucción no aplicada',`<div class="note">${esc(saved?.message||'La validación final no permitió guardar la geometría.')}</div>`,`<button class="btn" data-close>Cerrar</button>`);
   }
- }catch(e){console.error('[GEOTRACIA] Reconstrucción automática fallida',e);dlg('Error de reconstrucción',`<div class="note">${esc(errMsg(e))}</div>`,`<button class="btn" data-close>Cerrar</button>`);}
+ }catch(e){restoreBaseLayer();console.error('[GEOTRACIA] Reconstrucción automática fallida',e);dlg('Error de reconstrucción',`<div class="note">${esc(errMsg(e))}</div>`,`<button class="btn" data-close>Cerrar</button>`);}
 }
 async function saveSegment(){let f=$('#geoSegmentForm');if(!f.reportValidity())return;let start=Number($('#gsStart').value),end=Number($('#gsEnd').value);if(end<=start){toast('La progresiva final debe ser mayor que la inicial.');return}let c=sb(),payload={organization_id:S.org.id,project_id:S.projectId,road_id:$('#gsRoad').value,code:$('#gsCode').value.trim(),start_km:start,end_km:end,condition:$('#gsCondition').value};let b=$('[data-road-action="save-segment"]');b.disabled=true;try{let out;if(S.editSegment)out=await c.from('segments').update({road_id:payload.road_id,code:payload.code,start_km:start,end_km:end,condition:payload.condition,updated_at:new Date().toISOString()}).eq('id',S.editSegment).eq('organization_id',S.org.id).eq('project_id',S.projectId);else{let {data,error}=await c.auth.getUser();if(error)throw error;out=await c.from('segments').insert({...payload,created_by:data.user.id})}if(out.error)throw out.error;$('#dialog').close();toast(S.editSegment?'Tramo actualizado.':'Tramo guardado en Supabase.');await load()}catch(e){toast(errMsg(e));b.disabled=false}}
 async function delRoad(id){let r=S.roads.find(x=>x.id===id);if(!r||!confirm(`¿Eliminar ${r.code} y sus tramos asociados? Esta acción no se puede deshacer.`))return;try{let {error}=await sb().from('roads').delete().eq('id',id).eq('organization_id',S.org.id).eq('project_id',S.projectId);if(error)throw error;toast('Camino eliminado.');await load()}catch(e){toast(errMsg(e))}}
