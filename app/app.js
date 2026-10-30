@@ -1624,6 +1624,6 @@ window.addEventListener('online',()=>{updateSidebarNetworkStatus();window.dispat
 window.addEventListener('offline',()=>{updateSidebarNetworkStatus();window.dispatchEvent(new CustomEvent('geotracia:network-change',{detail:{online:false}}))});
 // Llamada inmediata: no depender exclusivamente del evento load.
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',updateSidebarNetworkStatus,{once:true});else updateSidebarNetworkStatus();
-window.addEventListener('load',()=>{updateSidebarNetworkStatus();if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./service-worker.js?v=offline-shell-v4-auth').then(()=>updateSidebarNetworkStatus()).catch(e=>console.warn('[GEOTRACIA] Service Worker no registrado',e))},{once:true});
+window.addEventListener('load',()=>{updateSidebarNetworkStatus();if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./service-worker.js?v=offline-shell-v5-auth-premium').then(()=>updateSidebarNetworkStatus()).catch(e=>console.warn('[GEOTRACIA] Service Worker no registrado',e))},{once:true});
 
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&document.querySelector("#ssWelcomeModal"))closeSsWelcomeModal()});

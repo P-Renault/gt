@@ -171,3 +171,21 @@ body:not(.geo-authenticated) .sidebar,body:not(.geo-authenticated) .main,body:no
   .auth-foot{margin-top:15px;padding-top:12px}
   .auth-main-footer{margin-top:14px}
 }
+
+/* Mobile brand plate: conserva el wordmark completo sobre fondo claro. */
+@media(max-width:760px){
+  .auth-mobile-brand{
+    box-sizing:border-box;
+    min-height:94px;
+    padding:13px 17px;
+    border:1px solid #e3ebef;
+    border-radius:17px;
+    background:linear-gradient(145deg,#fff 0%,#f8fbfc 100%);
+    box-shadow:0 10px 28px rgba(18,52,72,.07);
+  }
+  .auth-mobile-brand img{
+    width:min(100%,330px);
+    max-height:72px;
+    object-fit:contain;
+  }
+}
