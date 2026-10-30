@@ -1,0 +1,41 @@
+/* GEOTRACIA 1.6 — Administración de equipos por proyecto */
+.team-project-bar{display:grid;grid-template-columns:minmax(230px,1fr) minmax(220px,1fr);gap:16px;align-items:end;margin:0 0 16px;padding:16px 18px;border:1px solid #e1eaf0;border-radius:14px;background:linear-gradient(135deg,#fff,#f7fbfd)}
+.team-project-bar .field{max-width:100%;margin-top:6px}
+.team-project-meta{display:flex;flex-direction:column;gap:4px;padding:3px 4px}
+.team-meta-label{font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:#8294a3;font-weight:800}
+.team-project-meta b{font-size:14px;color:#1c3548}
+.team-project-meta small{font-size:11px;color:#778997}
+.team-notice{display:flex;gap:12px;align-items:flex-start;padding:13px 16px;margin:0 0 16px;border:1px solid #d7e7ef;border-radius:12px;background:#f3f9fc;color:#365367;font-size:12px;line-height:1.55}
+.team-notice b{white-space:nowrap;color:#17384d}
+.team-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.team-card{min-width:0;padding:17px 18px 14px;border:1px solid #e2eaf0;border-radius:15px;background:#fff;box-shadow:0 7px 22px rgba(19,49,70,.045)}
+.team-card-head{display:flex;align-items:center;gap:12px}
+.team-type-icon{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border-radius:12px;background:#eaf4f7;color:#28627a;font-size:20px}
+.team-type-laboratory{background:#e8f6f2;color:#0b8a77}
+.team-type-topography{background:#edf2ff;color:#4b65bb}
+.team-type-field{background:#fff4e6;color:#a16a18}
+.team-card-title{display:flex;justify-content:space-between;align-items:center;gap:8px;flex:1;min-width:0}
+.team-card-title h3{margin:3px 0 0;color:#17364b;font-size:16px;line-height:1.25;overflow-wrap:anywhere}
+.team-card-title .eyebrow{font-size:9px;color:#7890a0;font-weight:800;letter-spacing:1.1px;text-transform:uppercase}
+.team-code{flex:0 0 auto;padding:5px 8px;border-radius:7px;background:#f0f4f7;color:#607486;font-size:10px;font-weight:800}
+.team-description{margin:12px 0 0;color:#718493;font-size:12px;line-height:1.5}
+.team-members{margin-top:15px;padding-top:12px;border-top:1px solid #edf1f4}
+.team-members-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
+.team-members-head b{font-size:11px;color:#29465a}
+.team-members-head span{font-size:10px;color:#8292a0}
+.team-member-row{display:flex;align-items:center;gap:9px;min-width:0;padding:8px 0;border-top:1px solid #f1f4f6}
+.team-member-avatar{display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:#e8f1f5;color:#31576c;font-size:9px;font-weight:800}
+.team-member-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:2px}
+.team-member-copy b{overflow:hidden;color:#294457;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.team-member-copy small{overflow:hidden;color:#8a9aa6;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.team-remove{flex:0 0 27px;width:27px;height:27px;min-height:27px;border:1px solid #e7edf1;border-radius:8px;background:#fff;color:#8796a2}
+.team-remove:hover{border-color:#f0c6c6;color:#c24141;background:#fff7f7}
+.team-empty{padding:13px 10px;border:1px dashed #dce5eb;border-radius:9px;color:#8796a2;font-size:11px;text-align:center}
+.team-card-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px;padding-top:12px;border-top:1px solid #edf1f4}
+.team-card-actions .btn{min-height:33px;padding:7px 9px;font-size:10px}
+.team-card-actions .danger-btn{margin-left:auto}
+.team-no-data{grid-column:1/-1}
+@media(max-width:960px){.team-grid{grid-template-columns:1fr}.team-project-bar{grid-template-columns:1fr}}
+@media(max-width:600px){.team-project-bar{padding:13px;gap:12px}.team-card{padding:14px}.team-card-actions .btn{flex:1 1 auto}.team-card-actions .danger-btn{margin-left:0}}
+.team-card-inactive{opacity:.72;background:#f8fafb}
+.team-inactive-badge{padding:5px 8px;border-radius:7px;background:#fff3da;color:#976516;font-size:9px;font-weight:800}
