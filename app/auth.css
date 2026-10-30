@@ -18,3 +18,156 @@ body:not(.geo-authenticated) .sidebar,body:not(.geo-authenticated) .main,body:no
 
 /* Read-only account identifier during invitation activation and recovery */
 .auth-form input.auth-readonly{background:#f4f7f9;color:#66798b;border-color:#e2e9ee;cursor:not-allowed}
+
+
+/* GEOTRACIA AUTH — PREMIUM BRAND PRESENTATION 2026-10-30 */
+/* Mantiene intactos los flujos de autenticación; solo refina la presentación. */
+.auth-gate.visible{background:#f3f7fa}
+.auth-layout{grid-template-columns:minmax(360px,.92fr) minmax(460px,1.08fr)}
+.auth-story{
+  padding:clamp(30px,4.6vw,68px);
+  background:
+    radial-gradient(ellipse at 82% 10%,rgba(32,137,157,.48) 0,transparent 36%),
+    radial-gradient(ellipse at 5% 88%,rgba(8,139,126,.48) 0,transparent 38%),
+    linear-gradient(145deg,#061526 0%,#0a2b43 55%,#082536 100%);
+}
+.auth-story-brand{
+  display:flex;
+  align-items:center;
+  box-sizing:border-box;
+  width:min(100%,520px);
+  min-height:138px;
+  padding:17px 22px;
+  border:1px solid rgba(255,255,255,.82);
+  border-radius:19px;
+  background:linear-gradient(145deg,#fff 0%,#f7fbfc 100%);
+  box-shadow:0 20px 52px rgba(0,0,0,.24),0 1px 0 rgba(255,255,255,.8) inset;
+  line-height:0;
+}
+.auth-story-brand img{
+  display:block;
+  width:100%;
+  height:auto;
+  max-height:116px;
+  object-fit:contain;
+  object-position:center;
+}
+.auth-story-copy{max-width:560px;margin:auto 0}
+.auth-story-kicker{font-size:10px;letter-spacing:2.4px;margin-bottom:16px}
+.auth-story-copy h2{font-size:clamp(36px,3.9vw,56px);letter-spacing:-2.3px}
+.auth-story-copy p{font-size:15px;line-height:1.75;color:#c8d8e2}
+.auth-feature-grid{gap:9px}
+.auth-feature-grid div{
+  min-height:78px;
+  padding:12px 13px;
+  border-color:rgba(185,225,232,.2);
+  background:linear-gradient(145deg,rgba(255,255,255,.09),rgba(255,255,255,.035));
+  box-shadow:0 8px 24px rgba(0,0,0,.07);
+}
+.auth-feature-grid b{font-size:10px}
+.auth-story-footer{font-size:10px;color:#afc4d1}
+.auth-main{
+  padding:clamp(24px,4vw,58px);
+  background:
+    radial-gradient(ellipse at 50% 0%,rgba(218,244,240,.8) 0,transparent 35%),
+    linear-gradient(180deg,#f8fbfd 0%,#f1f6f9 100%);
+}
+.auth-card{
+  width:100%;
+  max-width:510px;
+  padding:30px 36px 25px;
+  border:1px solid #e2ebf0;
+  border-radius:23px;
+  background:rgba(255,255,255,.98);
+  box-shadow:0 24px 70px rgba(14,47,69,.10),0 3px 12px rgba(14,47,69,.035);
+  animation:auth-in .34s ease-out;
+}
+.auth-tabs{
+  gap:6px;
+  padding:5px;
+  margin-bottom:25px;
+  border-color:#e5edf1;
+  border-radius:13px;
+  background:#f0f5f7;
+}
+.auth-tab{min-height:44px;border-radius:9px}
+.auth-tab.active{border-color:#e5edf0;box-shadow:0 3px 10px rgba(18,48,67,.08)}
+.auth-kicker{margin-bottom:10px;font-size:9px;letter-spacing:2px}
+.auth-form h1,.auth-message h1{font-size:clamp(27px,2.5vw,33px);letter-spacing:-1.15px}
+.auth-form p,.auth-message p{margin-bottom:22px}
+.auth-form label{margin:15px 0 7px;font-size:11px}
+.auth-form input{min-height:48px;border-radius:10px}
+.password-toggle{top:7px;min-height:34px}
+.auth-utility-row{margin-top:13px}
+.auth-submit{min-height:52px;margin-top:19px;border-radius:11px;box-shadow:0 9px 20px rgba(8,139,130,.19)}
+.auth-submit:hover{box-shadow:0 12px 24px rgba(8,139,130,.25)}
+.auth-terms{margin-top:15px!important;font-size:10px!important}
+.auth-foot{margin-top:21px;padding-top:15px;font-size:10px}
+.auth-main-footer{margin-top:20px;color:#8d9eaa;font-size:10px}
+
+@media(max-width:1050px){
+  .auth-layout{grid-template-columns:minmax(300px,.82fr) minmax(420px,1.18fr)}
+  .auth-story{padding:30px 26px}
+  .auth-story-brand{min-height:116px;padding:14px 16px}
+  .auth-story-brand img{max-height:94px}
+  .auth-main{padding:25px}
+  .auth-card{padding:27px 28px 23px}
+  .auth-story-copy h2{font-size:40px}
+}
+@media(max-width:760px){
+  .auth-layout{display:block;min-height:100svh}
+  .auth-story{display:none}
+  .auth-main{
+    min-height:100svh;
+    justify-content:flex-start;
+    padding:clamp(18px,5vw,30px) 18px max(22px,env(safe-area-inset-bottom));
+    background:
+      radial-gradient(ellipse at 50% 0%,rgba(212,243,237,.95) 0,transparent 33%),
+      linear-gradient(180deg,#f4f9fb 0%,#fff 48%);
+  }
+  .auth-mobile-brand{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    width:100%;
+    max-width:460px;
+    margin:0 auto 21px;
+    padding:0 8px 3px;
+  }
+  .auth-mobile-brand img{
+    display:block;
+    width:min(100%,270px);
+    height:auto;
+    max-height:76px;
+    object-fit:contain;
+  }
+  .auth-card{
+    max-width:460px;
+    padding:clamp(22px,5vw,30px);
+    border:1px solid #e3ebef;
+    border-radius:21px;
+    background:#fff;
+    box-shadow:0 18px 48px rgba(17,52,73,.09);
+  }
+  .auth-tabs{margin-bottom:24px}
+  .auth-main-footer{margin-top:19px}
+}
+@media(max-width:380px){
+  .auth-main{padding-left:12px;padding-right:12px}
+  .auth-mobile-brand{margin-bottom:16px}
+  .auth-mobile-brand img{width:min(100%,245px);max-height:68px}
+  .auth-card{padding:20px 17px;border-radius:18px}
+}
+@media(max-height:820px) and (min-width:761px){
+  .auth-story{padding-top:25px;padding-bottom:25px}
+  .auth-story-brand{min-height:112px;padding:12px 17px}
+  .auth-story-brand img{max-height:88px}
+  .auth-story-copy p{margin:15px 0 18px}
+  .auth-feature-grid div{min-height:66px;padding:10px}
+  .auth-card{padding-top:23px;padding-bottom:19px}
+  .auth-tabs{margin-bottom:19px}
+  .auth-form p,.auth-message p{margin-bottom:17px}
+  .auth-form label{margin-top:12px}
+  .auth-foot{margin-top:15px;padding-top:12px}
+  .auth-main-footer{margin-top:14px}
+}
