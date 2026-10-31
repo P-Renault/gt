@@ -12,10 +12,10 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css?v=avatar-header-v1">
 <link rel="stylesheet" href="premium-ui.css?v=ss-premium-first-view-v4">
-<link rel="stylesheet" href="auth.css?v=auth-invite-recovery-v2">
+<link rel="stylesheet" href="auth.css?v=dt-geo-04-6-2-confirm-flow-v1">
 <link rel="stylesheet" href="roads.css?v=3.2">
 <link rel="stylesheet" href="sidebar-toggle.css?v=2.3">
-<link rel="stylesheet" href="teams.css?v=phase4-team-ui-v1">
+<link rel="stylesheet" href="teams.css?v=phase4-3-readiness-v1">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="map-gps.css">
 <link rel="stylesheet" href="map-gps-v06.css">
@@ -66,7 +66,7 @@
         <div id="authTabs" class="auth-tabs" hidden role="tablist" aria-label="Tipo de acceso"><button type="button" class="auth-tab active" data-auth-mode="login" role="tab" aria-selected="true">Iniciar sesión</button><button type="button" class="auth-tab" data-auth-mode="signup" role="tab" aria-selected="false">Crear cuenta</button></div>
         <form id="loginForm" class="auth-form" hidden>
           <span class="auth-kicker" id="authKicker">ACCESO A LA PLATAFORMA</span><h1 id="authTitle">Bienvenido de nuevo</h1><p id="authDescription">Ingresa a tu espacio de trabajo de GEOTRACIA.</p>
-          <div id="signupFields" hidden><label for="authName">Nombre completo</label><input id="authName" type="text" autocomplete="name" placeholder="Tu nombre y apellido"><label for="authOrg">Organización <span class="optional">· opcional</span></label><input id="authOrg" type="text" autocomplete="organization" placeholder="Nombre de tu organización"></div>
+          <div id="signupFields" hidden><label for="authFamilyNames">Apellidos</label><input id="authFamilyNames" type="text" autocomplete="family-name" placeholder="Apellidos completos"><label for="authGivenNames">Nombres</label><input id="authGivenNames" type="text" autocomplete="given-name" placeholder="Todos tus nombres"><div class="auth-name-format-note">Tu nombre se presentará como <b>Apellidos, Nombres</b>.</div><label for="authOrg">Organización <span class="optional">· opcional</span></label><input id="authOrg" type="text" autocomplete="organization" placeholder="Nombre de tu organización"></div>
           <label for="authEmail">Correo electrónico</label><input id="authEmail" type="email" name="geotracia-email" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="email" required placeholder="nombre@organizacion.cl">
           <label for="authPassword">Contraseña</label><div class="password-wrap"><input id="authPassword" type="password" name="geotracia-password" autocomplete="new-password" required minlength="8" placeholder="Mínimo 8 caracteres"><button type="button" id="togglePassword" class="password-toggle" aria-label="Mostrar contraseña" aria-pressed="false"><span class="toggle-icon">◉</span><span class="toggle-label">Mostrar</span></button></div>
           <div id="confirmField" hidden><label for="authConfirm">Confirmar contraseña</label><input id="authConfirm" type="password" autocomplete="new-password" minlength="8" placeholder="Repite la contraseña"></div>
@@ -84,7 +84,7 @@
 <div class="main"><header class="topbar"><button class="icon mobile-menu" id="menu" aria-label="Abrir menú" title="Abrir menú">☰</button><a class="header-brand" data-go="dashboard" href="#" aria-label="GEOTRACIA inicio"><img src="geotracia-logo.png" alt="GEOTRACIA — Inteligencia territorial en acción"></a><label class="search">⌕ <input id="globalSearch" placeholder="Buscar módulos, registros, caminos o usuarios…"><kbd>Ctrl K</kbd></label><div class="top-actions"><button class="project" id="project" type="button" aria-label="Ver proyecto activo Ruta R-720 Conservación"><span class="project-mark">R7</span><span class="project-copy"><small>PROYECTO ACTIVO</small><b>Ruta R-720 · Conservación</b></span></button><button class="icon notification-bell" id="notifications" type="button" title="Notificaciones" aria-label="Notificaciones"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/><path d="M9.5 17h5"/></svg></button><button class="icon" id="help" title="Ayuda">?</button><span class="avatar" id="userAvatar">GT</span><button class="btn" id="logoutBtn" type="button">Salir</button></div></header><main id="content"></main><footer>GEOTRACIA · Plataforma de inteligencia territorial <span>Framework visual v0.1 · Datos demostrativos</span></footer></div><div id="overlay" class="overlay"></div><div id="toast" class="toast"></div><dialog id="dialog"><div class="dialog-head"><div><small id="dialogEyebrow">GEOTRACIA</small><h2 id="dialogTitle">Acción</h2></div><button class="icon" data-close>×</button></div><div id="dialogBody" class="dialog-body"></div><div id="dialogFoot" class="dialog-foot"></div></dialog>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="supabase-config.js"></script><script src="auth.js?v=auth-invite-recovery-v2"></script><script src="app.js?v=phase4-2-role-labels-es-v1"></script><script src="roads.js?v=restore-rebuild-button-v3"></script><script src="sidebar-toggle.js?v=2.3"></script>
+<script src="supabase-config.js"></script><script src="person-name.js?v=dt-geo-04-6-2-confirm-flow-v1"></script><script src="auth.js?v=dt-geo-04-6-2-confirm-flow-v1"></script><script src="app.js?v=dt-geo-04-6-2-confirm-flow-v1"></script><script src="roads.js?v=restore-rebuild-button-v3"></script><script src="sidebar-toggle.js?v=2.3"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="roads.css?v=3.5">
 <script src="map-gps.js?v=3.2"></script><script src="map-gps-v06.js"></script>
