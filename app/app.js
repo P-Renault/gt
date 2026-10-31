@@ -37,6 +37,7 @@ const initialUsers=[
 const load=(k,v)=>{try{return JSON.parse(localStorage.getItem(k))||structuredClone(v)}catch{return structuredClone(v)}};
 let records=load("geo.records",initial), users=load("geo.users",initialUsers), active="dashboard", query="", typeFilter="", selectedCode=null, seq=70, tab="Resumen";
 let geoOrg=null, geoProjects=[], geoProjectsLoading=false, geoProjectsError="", geoCurrentUser=null, geoProjectsPromise=null;
+let geoOrganizationCreatePromise=null;
 let geoLoadDiagnostics={stage:'sin iniciar',userId:'',email:'',membershipRows:null,organizationId:'',projectsCount:null,errorCode:'',errorDetails:'',updatedAt:null};
 let kmProjectId="", kmRoads=[], kmSegments=[], kmLoading=false, kmError="";
 let inspectionProjectId="", inspectionRoads=[], inspectionSegments=[], inspectionRows=[], inspectionLoading=false, inspectionError="", inspectionMapInstance=null, inspectionMapMarkers={}, selectedInspectionId="", inspectionRoadGeometries={};
@@ -371,7 +372,75 @@ function newProject(p=null){const v=(key,def='')=>p?.[key]??def;dialog(p?'Editar
  <div class="full"><label class="field-label" for="pObjectives">Objetivos y alcance</label><textarea class="field" id="pObjectives" rows="3" maxlength="4000" placeholder="Objetivo general, entregables y alcance territorial">${esc(v('objectives'))}</textarea></div><div class="full"><label class="field-label" for="pDescription">Descripción / observaciones</label><textarea class="field" id="pDescription" rows="3" maxlength="4000" placeholder="Antecedentes, alcance técnico y notas">${esc(v('description'))}</textarea></div>
  <div class="note full">Las coordenadas son opcionales y corresponden a WGS 84. Las fechas y el presupuesto son datos de planificación; no representan pagos ejecutados.</div></form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="save-project" data-project-id="${esc(p?.id||'')}">Guardar proyecto</button>`)}
 async function saveGeoProject(id=''){const form=$('#projectForm');if(!form?.reportValidity())return;if(!geoOrg)return toast('Primero crea o selecciona una organización.');const startDate=$('#pStart').value||null,dueDate=$('#pDue').value||null;if(startDate&&dueDate&&dueDate<startDate)return toast('La fecha de término no puede ser anterior a la fecha de inicio.');const lat=$('#pLatitude').value.trim(),lon=$('#pLongitude').value.trim();if((lat&&!lon)||(!lat&&lon))return toast('Ingresa latitud y longitud juntas.');const payload={organization_id:geoOrg.id,name:$('#pName').value.trim(),code:$('#pCode').value.trim()||null,region:$('#pRegion').value.trim()||null,description:$('#pDescription').value.trim(),status:$('#pStatus').value,project_type:$('#pType').value,priority:$('#pPriority').value,client_name:$('#pClient').value.trim()||null,manager_name:$('#pManager').value.trim()||null,municipality:$('#pMunicipality').value.trim()||null,address:$('#pAddress').value.trim()||null,start_date:startDate,due_date:dueDate,budget:$('#pBudget').value===''?null:Number($('#pBudget').value),currency:$('#pCurrency').value,latitude:lat?Number(lat):null,longitude:lon?Number(lon):null,objectives:$('#pObjectives').value.trim()||null,updated_at:new Date().toISOString(),created_by:geoCurrentUser?.id};const button=$('[data-action=save-project]');if(button){button.disabled=true;button.textContent='Guardando…'}try{let result;if(id){delete payload.created_by;result=await window.geoSupabase.from('projects').update(payload).eq('id',id).eq('organization_id',geoOrg.id).select('id').single()}else result=await window.geoSupabase.from('projects').insert(payload).select('id').single();if(result.error)throw result.error;try{await window.geoSupabase.from('audit_logs').insert({organization_id:geoOrg.id,actor_id:geoCurrentUser?.id,action:id?'project.updated':'project.created',entity_table:'projects',entity_id:result.data.id,details:{name:payload.name,code:payload.code,status:payload.status,project_type:payload.project_type}})}catch{}$('#dialog').close();toast(id?'Proyecto actualizado en Supabase':'Proyecto creado en Supabase');await loadGeoProjects()}catch(e){toast(projectErrorMessage(e))}finally{if(button){button.disabled=false;button.textContent='Guardar proyecto'}}}
-async function createGeoOrganization(name){const client=window.geoSupabase;if(!client)return {ok:false,error:'Supabase no está disponible. Inicia sesión y vuelve a intentarlo.'};try{const {data,error}=await client.rpc('create_my_organization',{org_name:name.trim()});if(error)throw error;await loadGeoProjects();return {ok:true,data}}catch(e){return {ok:false,error:projectErrorMessage(e)}}}
+function geoOrgTimeout(promise,ms,label){let timer;return Promise.race([Promise.resolve(promise),new Promise((_,reject)=>{timer=setTimeout(()=>{const error=new Error(`${label}: tiempo de espera agotado (${Math.round(ms/1000)} s).`);error.code='GEOTRACIA_TIMEOUT';reject(error)},ms)})]).finally(()=>clearTimeout(timer))}
+function geoOrgIdFromRpc(value){let data=value;if(typeof data==='string'){try{data=JSON.parse(data)}catch{}}if(Array.isArray(data))data=data[0];if(!data||typeof data!=='object')return '';return String(data.organization_id||data.organizationId||data.org_id||data.id||'')}
+async function geoFindCreatedMembership(client,userId,orgName,orgId=''){
+ const result=await geoOrgTimeout(client.from('members').select('id,user_id,organization_id,role,active,organizations(id,name)').eq('user_id',userId).eq('active',true),12000,'Verificación de membresía');
+ if(result.error)throw result.error;
+ const expected=String(orgName||'').trim().toLocaleLowerCase('es');
+ const rows=Array.isArray(result.data)?result.data:[];
+ const normalized=rows.map(row=>({...row,organizations:Array.isArray(row.organizations)?row.organizations[0]:row.organizations}));
+ return normalized.find(row=>row.role==='owner'&&row.organization_id&& (orgId?String(row.organization_id)===String(orgId):String(row.organizations?.name||'').trim().toLocaleLowerCase('es')===expected))||null;
+}
+function geoSetCreatedOrganization(membership,client){
+ const org=Array.isArray(membership.organizations)?membership.organizations[0]:membership.organizations;
+ geoOrg={id:membership.organization_id,name:org?.name||'Organización',role:membership.role};
+ geoProjects=[];geoProjectsError='';geoProjectsLoading=true;
+ // La confirmación del alta no espera al listado de proyectos: así una consulta lenta no deja bloqueado el modal.
+ const projectLoad=geoOrgTimeout(client.from('projects').select('id,organization_id,name,code,description,region,status,created_by,created_at,updated_at,project_type,priority,client_name,manager_name,municipality,address,start_date,due_date,budget,currency,latitude,longitude,objectives').eq('organization_id',geoOrg.id).order('created_at',{ascending:false}),12000,'Carga de proyectos');
+ projectLoad.then(({data,error})=>{if(error)throw error;geoProjects=data||[];geoProjectsError='';}).catch(error=>{geoProjectsError=projectErrorMessage(error);console.warn('[GEOTRACIA] Organización creada; la carga de proyectos quedó pendiente:',error)}).finally(()=>{geoProjectsLoading=false;if(['dashboard','proyectos'].includes(active))show()});
+ return {ok:true,organizationId:geoOrg.id,organizationName:geoOrg.name,role:geoOrg.role};
+}
+async function createGeoOrganization(name){
+ const client=window.geoSupabase;
+ if(!client)return {ok:false,error:'Supabase no está disponible. Inicia sesión y vuelve a intentarlo.'};
+ const cleanName=String(name||'').trim();
+ if(cleanName.length<2)return {ok:false,error:'Ingresa un nombre de al menos 2 caracteres.'};
+ if(geoOrganizationCreatePromise)return geoOrganizationCreatePromise;
+ let keepLock=false;
+ const task=(async()=>{
+  try{
+   const {data:userData,error:userError}=await geoOrgTimeout(client.auth.getUser(),12000,'Validación de sesión');
+   if(userError)throw userError;
+   const user=userData?.user;
+   if(!user?.id)throw new Error('La sesión no está activa. Vuelve a iniciar sesión.');
+   geoCurrentUser=user;
+
+   // Si el alta ya se completó en un intento anterior, recuperar la membresía sin invocar otra vez la RPC.
+   let existing;
+   try{existing=await geoFindCreatedMembership(client,user.id,cleanName)}catch(error){
+    throw new Error('No fue posible comprobar si la organización ya existe. No se repetirá el alta para evitar duplicados. Detalle: '+(error?.message||'error de consulta'));
+   }
+   if(existing)return geoSetCreatedOrganization(existing,client);
+
+   const rpcPromise=client.rpc('create_my_organization',{org_name:cleanName});
+   let rpcResult;
+   try{rpcResult=await geoOrgTimeout(rpcPromise,25000,'Creación de organización')}
+   catch(error){
+    if(error?.code==='GEOTRACIA_TIMEOUT'){
+     keepLock=true;
+     // El servidor podría completar la transacción después del timeout; no permitir doble envío mientras la petición siga viva.
+     rpcPromise.finally(()=>{if(geoOrganizationCreatePromise===task)geoOrganizationCreatePromise=null}).catch(()=>{});
+    }
+    try{const recovered=await geoFindCreatedMembership(client,user.id,cleanName);if(recovered)return geoSetCreatedOrganization(recovered,client)}
+    catch(verifyError){return {ok:false,error:'No se pudo confirmar el resultado del alta. No vuelvas a enviarla todavía; comprueba si la organización aparece en tu cuenta. Detalle: '+(verifyError?.message||error?.message||'error de verificación')}}
+    throw error;
+   }
+   if(rpcResult?.error){
+    let recovered=null;
+    try{recovered=await geoFindCreatedMembership(client,user.id,cleanName)}catch(verifyError){console.warn('[GEOTRACIA] Falló la reconciliación tras respuesta RPC con error:',verifyError)}
+    if(recovered)return geoSetCreatedOrganization(recovered,client);
+    throw rpcResult.error;
+   }
+   const returnedOrgId=geoOrgIdFromRpc(rpcResult?.data);
+   const membership=await geoFindCreatedMembership(client,user.id,cleanName,returnedOrgId);
+   if(!membership)throw new Error('Supabase respondió, pero no se pudo verificar una membresía activa con rol owner para la organización recién creada. No se realizará otro intento automático.');
+   return geoSetCreatedOrganization(membership,client);
+  }catch(error){return {ok:false,error:projectErrorMessage(error)}}
+ })();
+ geoOrganizationCreatePromise=task;
+ try{return await task}finally{if(!keepLock&&geoOrganizationCreatePromise===task)geoOrganizationCreatePromise=null}
+}
 function viewGeoProject(id){const p=geoProjects.find(x=>x.id===id);if(!p)return;const money=p.budget==null?'No definido':new Intl.NumberFormat('es-CL',{style:'currency',currency:p.currency||'CLP',maximumFractionDigits:0}).format(Number(p.budget));const coord=p.latitude!=null&&p.longitude!=null?`${p.latitude}, ${p.longitude}`:'No definidas';const fields=[['Código',p.code||'—'],['Tipo',p.project_type||'—'],['Estado',projectStatus(p.status)],['Prioridad',({low:'Baja',normal:'Normal',high:'Alta',critical:'Crítica'})[p.priority]||'Normal'],['Mandante',p.client_name||'—'],['Responsable',p.manager_name||'—'],['Región',p.region||'—'],['Comuna',p.municipality||'—'],['Ubicación',p.address||'—'],['Coordenadas WGS 84',coord],['Inicio',p.start_date||'—'],['Término planificado',p.due_date||'—'],['Presupuesto',money],['Creado',p.created_at?new Date(p.created_at).toLocaleString('es-CL'):'—'],['Última actualización',p.updated_at?new Date(p.updated_at).toLocaleString('es-CL'):'—']];dialog('Ficha del proyecto',`<div class="project-detail"><h3>${esc(p.name)}</h3><p>${esc(p.description||'Sin descripción adicional')}</p><div class="form-grid">${fields.map(([l,v])=>`<div><label class="field-label">${esc(l)}</label><div>${esc(v)}</div></div>`).join('')}<div class="full"><label class="field-label">Objetivos y alcance</label><p>${esc(p.objectives||'No definidos')}</p></div></div>${p.latitude!=null&&p.longitude!=null?`<p><a href="https://www.openstreetmap.org/?mlat=${encodeURIComponent(p.latitude)}&mlon=${encodeURIComponent(p.longitude)}#map=15/${encodeURIComponent(p.latitude)}/${encodeURIComponent(p.longitude)}" target="_blank" rel="noopener">Abrir ubicación en OpenStreetMap ↗</a></p>`:''}</div>`,`<button class="btn" data-close>Cerrar</button><button class="btn" data-action="project-roads-open" data-project-id="${esc(p.id)}">Caminos y tramos</button><button class="btn primary" data-action="edit-project-from-view" data-project-id="${esc(p.id)}">Editar proyecto</button>`)}
 async function openProjectRoads(projectId){
  const p=geoProjects.find(x=>x.id===projectId);if(!p||!geoOrg)return;
@@ -1377,7 +1446,7 @@ case"edit-record":editRecord(e.dataset.code);break;
 case"confirm":$("#dialog").close();toast("Acción aplicada en la interfaz");break;
 default:toast("Acción de demostración; integración real pendiente");
 }}
-document.addEventListener("submit",e=>{if(e.target.id==="orgCreateForm"){e.preventDefault();const n=$("#orgCreateName").value.trim();if(n.length>=2)createGeoOrganization(n).then(r=>{if(!r.ok)toast(r.error);else toast("Organización creada")})}if(e.target.id==="ssWelcomeCreateForm"){e.preventDefault();const n=$("#ssWelcomeOrgName")?.value.trim();const status=$("#ssWelcomeCreateStatus");const submit=e.target.querySelector('button[type="submit"]');if(!n||n.length<2){if(status)status.textContent="Ingresa un nombre de al menos 2 caracteres.";return}if(submit){submit.disabled=true;submit.textContent="Creando organización…"}if(status)status.textContent="Creando organización y verificando el resultado…";createGeoOrganization(n).then(r=>{if(status)status.textContent=r.ok?"Organización creada. Actualizando tu espacio de trabajo…":r.error;if(!r.ok){if(submit){submit.disabled=false;submit.textContent="Crear organización"}}else{setTimeout(()=>{closeSsWelcomeModal();show()},700)}})}if(e.target.id==="projectForm"){e.preventDefault();saveGeoProject($("[data-action=save-project]")?.dataset.projectId||"")}if(e.target.id==="inventoryForm"){e.preventDefault();saveInventoryItem($("[data-action=inventory-save]")?.dataset.id||"")}if(e.target.id==="formsTemplateForm"){e.preventDefault();saveFormTemplate($("[data-action=forms-template-save]")?.dataset.id||"")}if(e.target.id==="formsSheetForm"){e.preventDefault();saveFormSheet($("[data-action=forms-sheet-save]")?.dataset.id||"")}});
+document.addEventListener("submit",e=>{if(e.target.id==="orgCreateForm"){e.preventDefault();const n=$("#orgCreateName").value.trim();if(n.length>=2)createGeoOrganization(n).then(r=>{if(!r.ok)toast(r.error);else toast("Organización creada")})}if(e.target.id==="ssWelcomeCreateForm"){e.preventDefault();const n=$("#ssWelcomeOrgName")?.value.trim();const status=$("#ssWelcomeCreateStatus");const submit=e.target.querySelector('button[type="submit"]');const cancel=e.target.querySelector(".ss-welcome-cancel");if(!n||n.length<2){if(status)status.textContent="Ingresa un nombre de al menos 2 caracteres.";return}if(submit){submit.disabled=true;submit.textContent="Creando organización…"}if(cancel)cancel.disabled=true;if(status)status.textContent="Creando organización y verificando la membresía…";createGeoOrganization(n).then(r=>{if(status)status.textContent=r.ok?"Organización creada y propietario verificado.":r.error;if(!r.ok){if(submit){submit.disabled=false;submit.textContent="Intentar nuevamente"}if(cancel)cancel.disabled=false}else{setTimeout(()=>{closeSsWelcomeModal();show();toast("Organización creada y membresía owner verificada")},400)}}).catch(error=>{if(status)status.textContent=error?.message||"No se pudo verificar la creación.";if(submit){submit.disabled=false;submit.textContent="Intentar nuevamente"}if(cancel)cancel.disabled=false})}if(e.target.id==="projectForm"){e.preventDefault();saveGeoProject($("[data-action=save-project]")?.dataset.projectId||"")}if(e.target.id==="inventoryForm"){e.preventDefault();saveInventoryItem($("[data-action=inventory-save]")?.dataset.id||"")}if(e.target.id==="formsTemplateForm"){e.preventDefault();saveFormTemplate($("[data-action=forms-template-save]")?.dataset.id||"")}if(e.target.id==="formsSheetForm"){e.preventDefault();saveFormSheet($("[data-action=forms-sheet-save]")?.dataset.id||"")}});
 document.addEventListener("click",e=>{if(e.target.closest('[data-action="create-org-welcome"]')){e.preventDefault();openSsWelcomeModal();return}if(e.target.closest('[data-action="close-ss-welcome"]')){e.preventDefault();closeSsWelcomeModal();return}
 let projectView=e.target.closest("[data-project-view]");if(projectView){viewGeoProject(projectView.dataset.projectView);return}
 let projectEdit=e.target.closest("[data-project-edit]");if(projectEdit){const p=geoProjects.find(x=>x.id===projectEdit.dataset.projectEdit);if(p)newProject(p);return}
