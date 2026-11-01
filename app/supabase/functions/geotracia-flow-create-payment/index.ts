@@ -76,17 +76,17 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: "ORGANIZATION_ACCESS_DENIED", stage }, 403);
 
     stage = "plan_lookup";
-    // La migración de Geotracia define id TEXT, active y custom_limits.
+    // Consultar las columnas del catálogo vigentes en el esquema Geotracia.
     const { data: plan, error: planError } = await db.from("geotracia_subscription_plans")
-      .select("id,name,monthly_price_clp,annual_price_clp,max_operators,custom_limits,features,active")
+      .select("id,code,name,monthly_price_clp,annual_price_clp,max_operators,is_custom,features,active,is_active")
       .eq("id", planId).maybeSingle();
     if (planError) {
       safeError(stage, planError);
       return json({ ok: false, error: "PLAN_QUERY_FAILED", stage, db_code: planError.code ?? null }, 500);
     }
     if (!plan) return json({ ok: false, error: "PLAN_NOT_FOUND", stage }, 404);
-    if (plan.active !== true) return json({ ok: false, error: "PLAN_INACTIVE", stage }, 400);
-    if (plan.custom_limits === true || String(plan.id).toLowerCase() === "institucional")
+    if (!(plan.active === true || plan.is_active === true)) return json({ ok: false, error: "PLAN_INACTIVE", stage }, 400);
+    if (plan.is_custom === true || String(plan.code ?? "").toLowerCase() === "institucional")
       return json({ ok: false, error: "PLAN_REQUIRES_COMMERCIAL_PROPOSAL", stage }, 400);
 
     stage = "price_validation";
