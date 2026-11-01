@@ -9,3 +9,6 @@ verify_jwt = false
 
 [functions.geotracia-invitations]
 verify_jwt = true
+
+[functions.geotracia-flow-get-status]
+verify_jwt = true
