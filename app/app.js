@@ -560,7 +560,7 @@ async function loadMaintenanceData(projectId=maintenanceProjectId){
  if(!geoOrg||!maintenanceProjectId){maintenanceLoading=false;if(active==='mantenimiento')show();return}
  maintenanceLoading=true;if(active==='mantenimiento')show();
  try{const c=window.geoSupabase;const [r,s,o]=await Promise.all([
- c.from('roads').select('id,organization_id,project_id,code,name,length_m').eq('organization_id',geoOrg.id).eq('project_id',maintenanceProjectId).order('code'),
+ c.from('roads').select('id,organization_id,project_id,code,name,length_m,intervention_start_km,intervention_end_km').eq('organization_id',geoOrg.id).eq('project_id',maintenanceProjectId).order('code'),
  c.from('segments').select('id,organization_id,project_id,road_id,code,start_km,end_km,condition').eq('organization_id',geoOrg.id).eq('project_id',maintenanceProjectId).order('start_km'),
  c.from('maintenance_orders').select('id,organization_id,project_id,road_id,segment_id,code,title,maintenance_type,priority,status,scheduled_start,due_date,started_at,completed_at,assigned_to,work_description,resources,estimated_cost,actual_cost,start_km,end_km,notes,created_by,created_at,updated_at').eq('organization_id',geoOrg.id).eq('project_id',maintenanceProjectId).order('created_at',{ascending:false})
  ]);for(const q of [r,s,o])if(q.error)throw q.error;maintenanceRoads=r.data||[];maintenanceSegments=s.data||[];maintenanceRows=o.data||[];maintenanceRoadGeometries={};
@@ -1082,6 +1082,17 @@ function inventoryLinePoint(geojson, progressKm, declaredLengthM){
  const target=Number(progressKm)*1000;const max=Number(declaredLengthM)>0?Number(declaredLengthM):total;const fraction=Math.max(0,Math.min(1,target/max));let remaining=fraction*total;
  for(let i=1;i<pts.length;i++){const d=lengths[i-1];if(remaining<=d||i===pts.length-1){const f=d?Math.max(0,Math.min(1,remaining/d)):0;return {lat:Number(pts[i-1][1])+(Number(pts[i][1])-Number(pts[i-1][1]))*f,lng:Number(pts[i-1][0])+(Number(pts[i][0])-Number(pts[i-1][0]))*f}}remaining-=d}return null;
 }
+function operationRoadProgressRange(road){
+ const start=road?.intervention_start_km==null?0:Number(road.intervention_start_km);
+ const end=road?.intervention_end_km==null?null:Number(road.intervention_end_km);
+ return {start:Number.isFinite(start)?start:0,end:Number.isFinite(end)?end:null};
+}
+function operationLinePoint(geojson, absoluteProgressKm, road, declaredLengthM){
+ const range=operationRoadProgressRange(road);
+ const relativeKm=Number(absoluteProgressKm)-range.start;
+ if(!Number.isFinite(relativeKm)||relativeKm<0||(range.end!=null&&Number(absoluteProgressKm)>range.end))return null;
+ return inventoryLinePoint(geojson,relativeKm,declaredLengthM);
+}
 function inventoryPointFor(item){const g=inventoryRoadGeometries[item?.road_id];const derived=g?inventoryLinePoint(g.geojson,item?.km_progressive,g.length_m):null;if(derived)return {...derived,derived:true};if(item?.latitude!=null&&item?.longitude!=null&&Number.isFinite(Number(item.latitude))&&Number.isFinite(Number(item.longitude)))return {lat:Number(item.latitude),lng:Number(item.longitude),legacy:true};return null}
 function refreshInventoryDerivedPoints(){inventoryRows=inventoryRows.map(x=>{const p=inventoryPointFor(x);return {...x,_mapLat:p?.lat??null,_mapLng:p?.lng??null}})}
 async function loadInventoryData(projectId=inventoryProjectId){
@@ -1167,7 +1178,7 @@ function editIncidentStatus(id){const x=incidentRows.find(r=>r.id===id);if(!x)re
 async function saveIncidentStatus(id){const x=incidentRows.find(r=>r.id===id);if(!x||!window.geoSupabase)return;const status=$('#icStatusOnly')?.value;if(!status)return;const {error}=await window.geoSupabase.from('road_incidents').update({status,updated_at:new Date().toISOString()}).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',incidentProjectId);if(error)return toast('No se pudo actualizar el estado: '+error.message);$('#dialog').close();toast('Estado de incidencia actualizado');await loadIncidentData(incidentProjectId)}
 // Operaciones y permisos: datos persistidos en Supabase, sin registros de muestra.
 let opsProjectId='', opsRows=[], opsAssignments=[], opsMembers=[], opsLoading=false, opsError='', opsRoads=[], opsRoadGeometries={}, opsMapInstance=null, opsMapLayers=[];
-const opsStatusLabel={planned:'Programada',in_progress:'En ejecución',paused:'Pausada',pending_review:'Pendiente de revisión',completed:'Completada',cancelled:'Cancelada'};
+const opsStatusLabel={planned:'Programada',in_progress:'En ejecución',paused:'Pausada',completed:'Completada',cancelled:'Cancelada'};
 const opsTypeLabel={operation:'Operación',service:'Servicio'};
 const opsRoleLabel={project_admin:'Administrador del proyecto',supervisor:'Supervisor',operator:'Operador',viewer:'Solo lectura'};
 function operationsModule(){
@@ -1196,7 +1207,7 @@ async function loadOperationsData(projectId=opsProjectId){
    c.from('geotracia_operations').select('*').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).order('created_at',{ascending:false}),
    c.from('geotracia_operation_assignments').select('*, geotracia_operations(title)').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).order('created_at',{ascending:false}),
    c.from('geotracia_project_access').select('*').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).order('created_at',{ascending:false}),
-   c.from('roads').select('id,organization_id,project_id,code,name,length_m').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).order('code')
+   c.from('roads').select('id,organization_id,project_id,code,name,length_m,intervention_start_km,intervention_end_km').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).order('code')
   ]);
   if(r.error)throw r.error;if(a.error)throw a.error;if(m.error)throw m.error;if(roads.error)throw roads.error;
   opsRows=r.data||[];opsAssignments=(a.data||[]).map(x=>({...x,operation_title:x.geotracia_operations?.title}));opsMembers=m.data||[];opsRoads=roads.data||[];opsRoadGeometries={};
@@ -1213,10 +1224,10 @@ function renderOperationsMap(){
  const lines=g=>{if(!g)return[];if(g.type==='Feature')g=g.geometry;if(!g)return[];if(g.type==='LineString')return[g.coordinates||[]];if(g.type==='MultiLineString')return g.coordinates||[];if(g.type==='GeometryCollection')return(g.geometries||[]).flatMap(x=>x.type==='LineString'?[x.coordinates||[]]:x.type==='MultiLineString'?(x.coordinates||[]):[]);return[]};
  const normalizedGeo=g=>{if(!g)return null;if(g.type==='Feature')return g.geometry;return g};
  opsRoads.forEach(r=>{const g=opsRoadGeometries[r.id];if(!g)return;lines(normalizedGeo(g.geojson)).forEach(coords=>{const ll=coords.filter(c=>Array.isArray(c)&&c.length>=2).map(c=>[Number(c[1]),Number(c[0])]).filter(c=>Number.isFinite(c[0])&&Number.isFinite(c[1]));if(ll.length<2)return;const p=L.polyline(ll,{color:'#94a3b8',weight:4,opacity:.8}).addTo(map);p.bindTooltip(`${esc(r.code||'Camino')} · ${esc(r.name||'')}`);opsMapLayers.push(p);ll.forEach(c=>bounds.push(c));roadsShown++})});
- opsRows.forEach(x=>{const g=opsRoadGeometries[x.road_id];if(!g)return;const point=x.km_progressive!=null?inventoryLinePoint(normalizedGeo(g.geojson),Number(x.km_progressive),g.length_m):null;let ll;
+ opsRows.forEach(x=>{const g=opsRoadGeometries[x.road_id];if(!g)return;const road=opsRoads.find(r=>r.id===x.road_id);const point=x.km_progressive!=null?operationLinePoint(normalizedGeo(g.geojson),Number(x.km_progressive),road,g.length_m):null;let ll;
   if(point)ll=[point.lat,point.lng];else if(x.km_progressive==null){const coords=lines(normalizedGeo(g.geojson)).find(a=>Array.isArray(a)&&a.length>=2);const c=coords?.[Math.floor((coords.length-1)/2)];if(c)ll=[Number(c[1]),Number(c[0])]}
   if(!ll||!Number.isFinite(ll[0])||!Number.isFinite(ll[1]))return;
-  const color=x.status==='completed'?'#16a34a':x.status==='paused'?'#dc2626':x.status==='in_progress'?'#ea580c':'#2563eb';const m=L.circleMarker(ll,{radius:9,color:'#fff',weight:2,fillColor:color,fillOpacity:.98}).addTo(map);const road=opsRoads.find(r=>r.id===x.road_id);const prog=x.km_progressive==null?'Progresiva no registrada':`Km ${Number(x.km_progressive).toFixed(3).replace('.',',')}`;
+  const color=x.status==='completed'?'#16a34a':x.status==='paused'?'#dc2626':x.status==='in_progress'?'#ea580c':'#2563eb';const m=L.circleMarker(ll,{radius:9,color:'#fff',weight:2,fillColor:color,fillOpacity:.98}).addTo(map);const prog=x.km_progressive==null?'Progresiva no registrada':`Km ${Number(x.km_progressive).toFixed(3).replace('.',',')}`;
   m.bindTooltip(`${esc(x.code||'Operación')} · ${esc(x.title)}`);m.bindPopup(`<b>${esc(x.code||'')}</b><br>${esc(x.title)}<br>${esc(road?.code||'Camino')} · ${esc(road?.name||'')}<br>${esc(prog)}<br>Estado: ${esc(opsStatusLabel[x.status]||x.status)}<br>Responsable: ${esc(x.assignee_name||'Sin asignar')}`);opsMapLayers.push(m);bounds.push(ll);pointsShown++;
  });
  if(bounds.length)map.fitBounds(L.latLngBounds(bounds),{padding:[24,24],maxZoom:15});const status=$('#opsMapStatus');
@@ -1224,58 +1235,67 @@ function renderOperationsMap(){
  setTimeout(()=>map.invalidateSize(),160)
 }
 function newOperation(item=null){
- if(!opsProjectId||!geoOrg)return toast('Selecciona un proyecto primero.');
- const x=item||{};
+ if(!opsProjectId||!geoOrg)return toast('Selecciona un proyecto primero.');const x=item||{};
  const roadOptions=opsRoads.map(r=>`<option value="${esc(r.id)}" ${(x.road_id||'')===r.id?'selected':''}>${esc((r.code?r.code+' · ':'')+r.name)}</option>`).join('');
- const editing=Boolean(item);
- dialog(editing?'Editar datos de operación':'Nueva operación o servicio',`<form id="opsForm" class="form-grid">
- ${editing?`<div class="note full">El código y el tipo son datos de creación y no se modifican desde esta pantalla. El estado se controla mediante el flujo de revisión.</div><div><label class="field-label">Código</label><input class="field" value="${esc(x.code||'—')}" disabled></div><div><label class="field-label">Tipo</label><input class="field" value="${esc(opsTypeLabel[x.kind]||x.kind||'—')}" disabled></div>`:`<div><label class="field-label" for="opsKind">Tipo</label><select class="field" id="opsKind"><option value="operation" ${x.kind==='operation'?'selected':''}>Operación</option><option value="service" ${x.kind==='service'?'selected':''}>Servicio</option></select></div><div>${field('Código','opsCode','OP-2026-001',x.code||'')}</div>`}
- ${field('Nombre / actividad','opsTitle','Ej. Inspección de señalización',x.title||'')}
+ dialog(item?'Editar operación o servicio':'Nueva operación o servicio',`<form id="opsForm" class="form-grid">
+ <div><label class="field-label" for="opsKind">Tipo</label><select class="field" id="opsKind" ${item?'disabled':''}><option value="operation" ${x.kind==='operation'?'selected':''}>Operación</option><option value="service" ${x.kind==='service'?'selected':''}>Servicio</option></select></div>
+ <div><label class="field-label" for="opsStatus">Estado</label><select class="field" id="opsStatus" ${item?'disabled':''}>${Object.entries(opsStatusLabel).map(([v,l])=>`<option value="${v}" ${(x.status||'planned')===v?'selected':''}>${l}</option>`).join('')}</select></div>
+ <div><label class="field-label" for="opsCode">Código</label><input class="field" id="opsCode" value="${esc(x.code||'')}" ${item?'disabled':''}></div>${field('Nombre / actividad','opsTitle','Ej. Inspección de señalización',x.title||'')}
  <div><label class="field-label" for="opsPriority">Prioridad</label><select class="field" id="opsPriority">${[['low','Baja'],['normal','Normal'],['high','Alta'],['critical','Crítica']].map(([v,l])=>`<option value="${v}" ${(x.priority||'normal')===v?'selected':''}>${l}</option>`).join('')}</select></div>
  <div class="full"><label class="field-label" for="opsRoadId">Camino del proyecto</label><select class="field" id="opsRoadId" required><option value="">Seleccionar camino…</option>${roadOptions}</select><small class="sub">Solo se muestran caminos registrados en el proyecto seleccionado.</small></div>
- <div class="full"><label class="field-label" for="opsKmProgressive">Progresiva del punto (km)</label><input class="field" id="opsKmProgressive" type="number" min="0" step="0.001" inputmode="decimal" placeholder="Ej. 12.300" value="${x.km_progressive==null?'':esc(x.km_progressive)}" required><small class="sub">Ingresa kilómetros decimales: 12+300 se registra como 12.300 km.</small><div id="opsProgressHint" class="sub" style="margin-top:5px"></div></div>
+ <div class="full"><label class="field-label" for="opsKmProgressive">Progresiva del punto (km)</label><input class="field" id="opsKmProgressive" type="number" min="0" step="0.001" inputmode="decimal" placeholder="Ej. 12.300" value="${x.km_progressive==null?'':esc(x.km_progressive)}" required><small class="sub">Ingresa la progresiva kilométrica absoluta del camino (por ejemplo, km 68.000). El punto se calcula desde la progresiva inicial del tramo.</small><div id="opsProgressHint" class="sub" style="margin-top:5px"></div></div>
  ${field('Responsable','opsAssignee','Nombre del responsable',x.assignee_name||'')}
  <div><label class="field-label" for="opsStart">Fecha de inicio</label><input class="field" id="opsStart" type="date" value="${esc(x.start_date||'')}"></div><div><label class="field-label" for="opsDue">Fecha límite</label><input class="field" id="opsDue" type="date" value="${esc(x.due_date||'')}"></div>
  <div class="full"><label class="field-label" for="opsDescription">Descripción y alcance</label><textarea class="field" id="opsDescription" rows="3">${esc(x.description||'')}</textarea></div><div class="full"><label class="field-label" for="opsNotes">Notas de ejecución</label><textarea class="field" id="opsNotes" rows="2">${esc(x.notes||'')}</textarea></div>
- <div class="full" style="background:#f1f5f9;border-radius:10px;padding:10px"><b>Ubicación cartográfica</b><div class="sub">El marcador se ubicará sobre el camino y progresiva seleccionados.</div></div><div class="full sub" id="opsSaveStatus" role="status" aria-live="polite"></div>
+ <div class="full" style="background:#f1f5f9;border-radius:10px;padding:10px"><b>Ubicación cartográfica</b><div class="sub">Al guardar, el marcador se ubicará sobre el camino y progresiva seleccionados en el mapa del módulo.</div></div><div class="full sub" id="opsSaveStatus" role="status" aria-live="polite"></div>
  </form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="ops-save" data-id="${esc(x.id||'')}">Guardar en Supabase</button>`);
- const roadSel=$('#opsRoadId'),kmInput=$('#opsKmProgressive'),hint=$('#opsProgressHint');
- const validateKm=()=>{const r=opsRoads.find(a=>a.id===roadSel?.value),v=kmInput?.value===''?null:Number(kmInput?.value);if(!hint)return;if(!r){hint.textContent='Selecciona primero el camino.';return}if(v==null||!Number.isFinite(v)||v<0){hint.textContent='Ingresa la progresiva del punto en km.';return}const length=Number(r.length_m||r.official_length_m||r.geometry_length_m||0)/1000;if(length>0&&v>length){hint.textContent=`La progresiva supera la longitud registrada (${length.toFixed(3)} km).`;return}const g=opsRoadGeometries[r.id];const pt=g?inventoryLinePoint(g.geojson?.type==='Feature'?g.geojson.geometry:g.geojson,v,g.length_m):null;hint.textContent=pt?'Punto calculable sobre la geometría vial.':`Camino seleccionado${length>0?` · longitud ${length.toFixed(3)} km`:''}. Se requiere geometría vial válida.`};
- roadSel?.addEventListener('change',validateKm);kmInput?.addEventListener('input',validateKm);validateKm();
+ const roadSel=$('#opsRoadId'),kmInput=$('#opsKmProgressive'),hint=$('#opsProgressHint');const validateKm=()=>{const r=opsRoads.find(a=>a.id===roadSel?.value),v=kmInput?.value===''?null:Number(kmInput?.value);if(!hint)return;if(!r){hint.textContent='Selecciona primero el camino.';return}if(v==null||!Number.isFinite(v)){hint.textContent='Ingresa la progresiva del punto en km.';return}const range=operationRoadProgressRange(r),length=Number(r.length_m||r.official_length_m||r.geometry_length_m||0)/1000;const max=range.end==null?(length>0?range.start+length:null):range.end;if(v<range.start||(max!=null&&v>max)){hint.textContent=`Progresiva fuera del tramo. Rango válido: km ${range.start.toFixed(3)}${max==null?'':`–${max.toFixed(3)}`}.`;return}const g=opsRoadGeometries[r.id];const pt=g?operationLinePoint(g.geojson?.type==='Feature'?g.geojson.geometry:g.geojson,v,r,g.length_m):null;hint.textContent=pt?`Progresiva válida. Rango del camino: km ${range.start.toFixed(3)}–${(max??(range.start+length)).toFixed(3)}. Punto calculable sobre la geometría.`:`Progresiva dentro del rango, pero no se pudo calcular el punto. Verifica la geometría vial.`};roadSel?.addEventListener('change',validateKm);kmInput?.addEventListener('input',validateKm);validateKm();
 }
 async function saveOperation(id=''){
- const f=$('#opsForm'),saveBtn=$('#dialogFoot [data-action="ops-save"]'),status=$('#opsSaveStatus');
- const report=message=>{if(status)status.textContent=message;toast(message)};
- if(!f)return report('No se encontró el formulario de operación.');if(!f.reportValidity())return report('Revisa los campos obligatorios.');
- if(!window.geoSupabase||!geoOrg?.id||!opsProjectId)return report('La sesión, Supabase o el proyecto no están disponibles.');
- const title=$('#opsTitle')?.value.trim(),start=$('#opsStart')?.value||null,due=$('#opsDue')?.value||null;
- if(!title)return report('Ingresa el nombre de la operación.');if(start&&due&&due<start)return report('La fecha límite no puede ser anterior al inicio.');
- const roadId=$('#opsRoadId')?.value||null,road=opsRoads.find(r=>r.id===roadId);if(!road)return report('Selecciona un camino válido del proyecto.');
- const kmRaw=$('#opsKmProgressive')?.value,km=kmRaw===''||kmRaw==null?null:Number(kmRaw);if(km==null||!Number.isFinite(km)||km<0)return report('Ingresa una progresiva válida en kilómetros.');
- const roadLength=Number(road.length_m||road.official_length_m||road.geometry_length_m||0)/1000;if(roadLength>0&&km>roadLength)return report(`La progresiva supera la longitud del camino (${roadLength.toFixed(3)} km).`);
- let geojson=opsRoadGeometries[roadId]?.geojson;if(typeof geojson==='string'){try{geojson=JSON.parse(geojson)}catch{geojson=null}}if(geojson?.type==='Feature')geojson=geojson.geometry;
- if(!geojson||!inventoryLinePoint(geojson,km,opsRoadGeometries[roadId]?.length_m))return report('No se pudo calcular el punto sobre la geometría del camino.');
- const common={road_id:roadId,km_progressive:km,title,location:road.name||road.code||null,assignee_name:$('#opsAssignee')?.value.trim()||null,priority:$('#opsPriority')?.value||'normal',start_date:start,due_date:due,description:$('#opsDescription')?.value.trim()||null,notes:$('#opsNotes')?.value.trim()||null};
- const payload=id?common:{organization_id:geoOrg.id,project_id:opsProjectId,kind:$('#opsKind')?.value||'operation',code:$('#opsCode')?.value.trim()||null,...common,created_by:geoCurrentUser?.id||null};
- try{if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Guardando…'}if(status)status.textContent='Guardando datos operativos…';
-  const q=id?window.geoSupabase.from('geotracia_operations').update(payload).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',opsProjectId):window.geoSupabase.from('geotracia_operations').insert(payload);
-  const result=await q.select('id').maybeSingle();if(result.error)throw result.error;if(id&&!result.data)throw new Error('No se actualizó ningún registro. Comprueba tu permiso operations.update.');
-  try{await window.geoSupabase.from('audit_logs').insert({organization_id:geoOrg.id,actor_id:geoCurrentUser?.id||null,action:id?'operation.updated':'operation.created',entity_table:'geotracia_operations',entity_id:result.data?.id||id||null,details:{project_id:opsProjectId,title,kind:id?opsRows.find(o=>o.id===id)?.kind:payload.kind}})}catch(auditError){console.warn('[GEOTRACIA] Auditoría complementaria no disponible',auditError)}
-  $('#dialog').close();toast(id?'Datos de operación actualizados.':'Operación creada en estado Programada.');await loadOperationsData(opsProjectId);
- }catch(e){console.error('[GEOTRACIA] Error al guardar operación',e);report('No se pudo guardar: '+(e?.message||'error desconocido de Supabase'));}
+ const f=$('#opsForm');
+ const saveBtn=$('#dialogFoot [data-action="ops-save"]');
+ const status=$('#opsSaveStatus');
+ const report=(message)=>{if(status)status.textContent=message;toast(message)};
+ if(!f){report('No se encontró el formulario de operación. Cierra la ventana y vuelve a abrirla.');return}
+ if(!f.reportValidity()){report('Revisa los campos obligatorios del formulario.');return}
+ if(!window.geoSupabase){report('Supabase no está disponible. Revisa la conexión e inténtalo nuevamente.');return}
+ if(!geoOrg?.id){report('No hay una organización activa seleccionada.');return}
+ if(!opsProjectId){report('Selecciona un proyecto antes de guardar la operación.');return}
+ const title=$('#opsTitle')?.value.trim();
+ const start=$('#opsStart')?.value||null;
+ const due=$('#opsDue')?.value||null;
+ if(!title){report('Ingresa el nombre de la operación.');return}
+ if(start&&due&&due<start){report('La fecha límite no puede ser anterior al inicio.');return}
+ const roadId=$('#opsRoadId')?.value||null;
+ const road=opsRoads.find(r=>r.id===roadId);
+ if(!roadId||!road){report('Selecciona un camino válido del proyecto.');return}
+ const kmRaw=$('#opsKmProgressive')?.value;
+ const km=kmRaw===''||kmRaw==null?null:Number(kmRaw);
+ if(km==null||!Number.isFinite(km)||km<0){report('Ingresa una progresiva válida en kilómetros.');return}
+ const range=operationRoadProgressRange(road);
+ const roadLength=Number(road.length_m||road.official_length_m||road.geometry_length_m||0)/1000;
+ const maxProgress=range.end==null?(roadLength>0?range.start+roadLength:null):range.end;
+ if(km<range.start||(maxProgress!=null&&km>maxProgress)){report(`Progresiva fuera del tramo. Rango válido: km ${range.start.toFixed(3)}${maxProgress==null?'':`–${maxProgress.toFixed(3)}`}.`);return}
+ const geometry=opsRoadGeometries[roadId];
+ let geojson=geometry?.geojson;
+ if(typeof geojson==='string'){try{geojson=JSON.parse(geojson)}catch{geojson=null}}
+ if(geojson?.type==='Feature')geojson=geojson.geometry;
+ const point=geometry&&geojson?operationLinePoint(geojson,km,road,geometry.length_m):null;
+ if(!point){report('No se pudo calcular el punto sobre la geometría del camino. Verifica que el camino tenga geometría válida y que el módulo haya cargado sus datos.');return}
+ const editablePayload={road_id:roadId,km_progressive:km,title,location:road.name||road.code||null,assignee_name:$('#opsAssignee')?.value.trim()||null,priority:$('#opsPriority')?.value||'normal',start_date:start,due_date:due,description:$('#opsDescription')?.value.trim()||null,notes:$('#opsNotes')?.value.trim()||null};
+ const payload=id?editablePayload:{...editablePayload,organization_id:geoOrg.id,project_id:opsProjectId,kind:$('#opsKind')?.value||'operation',code:$('#opsCode')?.value.trim()||null,created_by:geoCurrentUser?.id||null};
+ try{
+  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Guardando…'}
+  if(status)status.textContent='Guardando operación en Supabase…';
+  let q=id?window.geoSupabase.from('geotracia_operations').update(payload).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',opsProjectId):window.geoSupabase.from('geotracia_operations').insert(payload);
+  const result=await q.select('id').maybeSingle();
+  if(result.error)throw result.error;
+  if(id&&!result.data){throw new Error('No se actualizó ningún registro. Comprueba los permisos de edición (RLS) y que la operación pertenezca al proyecto activo.')}
+  try{await window.geoSupabase.from('audit_logs').insert({organization_id:geoOrg.id,actor_id:geoCurrentUser?.id||null,action:id?'operation.updated':'operation.created',entity_table:'geotracia_operations',entity_id:result.data?.id||id||null,details:{project_id:opsProjectId,title,kind:id?undefined:payload.kind,status:id?undefined:'planned'}})}catch(auditError){console.warn('[GEOTRACIA] No se pudo registrar auditoría de operación',auditError)}
+  $('#dialog').close();toast('Operación guardada correctamente.');await loadOperationsData(opsProjectId);
+  if(!opsRows.some(x=>x.id===(result.data?.id||id))){console.warn('[GEOTRACIA] La operación se guardó, pero no aparece en la recarga de la lista.',result.data)}
+ }catch(e){console.error('[GEOTRACIA] Error al guardar operación',e);report('No se pudo guardar la operación: '+(e?.message||'error desconocido de Supabase'));}
  finally{if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Guardar en Supabase'}}
-}
-async function viewOperation(id){
- const op=opsRows.find(x=>x.id===id);if(!op)return toast('No se encontró la operación.');
- dialog('Detalle y flujo de revisión',`<div class="stack"><div><b>${esc(op.code||'Sin código')} · ${esc(op.title)}</b><div class="sub">${esc(opsTypeLabel[op.kind]||op.kind)} · ${esc(opsStatusLabel[op.status]||op.status)}</div></div><div class="note">Responsable: ${esc(op.assignee_name||'Sin asignar')} · Prioridad: ${esc(op.priority||'normal')}<br>Inicio: ${esc(op.start_date||'—')} · Fecha límite: ${esc(op.due_date||'—')}<br>Ubicación: ${esc(op.location||'—')} · Progresiva: ${op.km_progressive==null?'—':Number(op.km_progressive).toFixed(3)+' km'}</div><div><b>Descripción</b><p>${esc(op.description||'Sin descripción')}</p><b>Notas</b><p>${esc(op.notes||'Sin notas')}</p></div><div id="opsReviewHistory" class="sub">Cargando historial de revisión…</div></div>`,`<button class="btn" data-close>Cerrar</button>${op.status==='planned'?`<button class="btn primary" data-action="ops-transition" data-id="${esc(id)}" data-transition="start">Iniciar</button>`:''}${op.status==='in_progress'?`<button class="btn" data-action="ops-transition" data-id="${esc(id)}" data-transition="pause">Pausar</button><button class="btn primary" data-action="ops-transition" data-id="${esc(id)}" data-transition="submit_for_review">Enviar a revisión</button>`:''}${op.status==='paused'?`<button class="btn" data-action="ops-transition" data-id="${esc(id)}" data-transition="resume">Reanudar</button><button class="btn primary" data-action="ops-transition" data-id="${esc(id)}" data-transition="submit_for_review">Enviar a revisión</button>`:''}${op.status==='pending_review'?`<button class="btn" data-action="ops-transition" data-id="${esc(id)}" data-transition="reject">Devolver</button><button class="btn primary" data-action="ops-transition" data-id="${esc(id)}" data-transition="approve">Aprobar y completar</button>`:''}${!['completed','cancelled'].includes(op.status)?`<button class="btn danger" data-action="ops-transition" data-id="${esc(id)}" data-transition="cancel">Cancelar</button>`:''}`);
- try{const {data,error}=await window.geoSupabase.from('geotracia_operation_reviews').select('action,from_status,to_status,comment,created_at,actor_id').eq('operation_id',id).order('created_at',{ascending:false}).limit(50);if(error)throw error;const target=$('#opsReviewHistory');if(target)target.innerHTML=`<b>Historial de revisión</b>${(data||[]).length?`<ul>${data.map(r=>`<li>${esc(new Date(r.created_at).toLocaleString('es-CL'))}: ${esc(r.action)} (${esc(opsStatusLabel[r.from_status]||r.from_status)} → ${esc(opsStatusLabel[r.to_status]||r.to_status)})${r.comment?`<div>${esc(r.comment)}</div>`:''}</li>`).join('')}</ul>`:'<p>Sin transiciones registradas.</p>'}`;}catch(e){const target=$('#opsReviewHistory');if(target)target.textContent='No fue posible consultar el historial: '+(e?.message||'error');}
-}
-async function transitionOperation(id,action){
- if(!window.geoSupabase)return toast('Supabase no está disponible.');
- const commentsRequired=['reject','cancel'].includes(action);let comment=null;
- if(commentsRequired){comment=window.prompt(action==='reject'?'Indica el motivo de devolución:':'Indica el motivo de cancelación:');if(comment===null)return;if(!comment.trim())return toast('Debes ingresar un comentario para esta acción.');}
- try{const {data,error}=await window.geoSupabase.rpc('geotracia_transition_operation',{p_operation_id:id,p_action:action,p_comment:comment});if(error)throw error;if(data?.ok===false)throw new Error(data.message||'Transición rechazada.');toast(data?.message||'Estado actualizado.');if($('#dialog')?.open)$('#dialog').close();await loadOperationsData(opsProjectId);}
- catch(e){console.error('[GEOTRACIA] Error en transición de operación',e);toast('No se pudo cambiar el estado: '+(e?.message||'error de Supabase'));}
 }
 function assignOperation(){
  if(!geoOrg?.id)return toast('Selecciona una organización antes de asignar responsables.');
@@ -1432,7 +1452,7 @@ case"forms-reload":loadFormsData(formsProjectId);break;case"forms-template-new":
 case"new-record":newRecord();break;case"new-incident":newRecord("Incidencia");break;case"save-record":saveRecord();break;case"inspection-reload":loadInspectionData(inspectionProjectId);break;case"inspection-new":newInspection();break;case"inspection-save":saveInspection();break;case"inspection-view":viewInspection(e?.dataset?.id||"");break;case"inspection-locate":selectInspectionOnMap(e?.dataset?.id||"",false);break;case"inspection-edit-status":editInspectionStatus(e?.dataset?.id||"");break;case"inspection-status-save":saveInspectionStatus(e?.dataset?.id||"");break;case"inventory-reload":loadInventoryData(inventoryProjectId);break;case"inventory-new":newInventoryItem();break;case"inventory-save":saveInventoryItem(e?.dataset?.id||"");break;case"inventory-view":viewInventoryItem(e?.dataset?.id||"");break;case"inventory-edit":editInventoryItem(e?.dataset?.id||"");break;case"inventory-locate":selectInventoryOnMap(e?.dataset?.id||"",false);break;case"incident-reload":loadIncidentData(incidentProjectId);break;case"incident-new":newIncident();break;case"incident-save":saveIncident(e?.dataset?.id||"");break;case"incident-view":viewIncident(e?.dataset?.id||"");break;case"incident-edit":newIncident(incidentRows.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"incident-edit-status":editIncidentStatus(e?.dataset?.id||"");break;case"incident-status-save":saveIncidentStatus(e?.dataset?.id||"");break;case"incident-locate":selectIncidentOnMap(e?.dataset?.id||"",false);break;case"kilometraje-reload":loadKilometrajeData(kmProjectId);break;
 case"dashboard-refresh":loadDashboardData();break;case"dashboard-projects-retry":geoProjectsPromise=null;geoProjectsError='';geoOrg=null;geoProjects=[];loadGeoProjects().then(()=>{if(active==='dashboard')loadDashboardData();else show()});break;case"dashboard-export":exportDashboardSummary();break;case"project-roads-open":openProjectRoads(e?.dataset?.projectId||"");break;case"project-road-new":newProjectRoad(e?.dataset?.projectId||"");break;case"project-road-save":saveProjectRoad(e?.dataset?.projectId||"");break;case"project-segment-new":newProjectSegment(e?.dataset?.projectId||"");break;case"project-segment-save":saveProjectSegment(e?.dataset?.projectId||"");break;case"new-project":newProject();break;case"save-project":saveGeoProject(e?.dataset?.projectId||"");break;case"reload-projects":loadGeoProjects();break;case"archive-project-confirm":confirmArchiveProject(e?.dataset?.projectId||"");break;case"export-projects":exportGeoProjects();break;case"clear-project-filters":{const a=$("#projectSearch"),b=$("#projectStatusFilter"),c=$("#projectTypeFilter");if(a)a.value="";if(b)b.value="";if(c)c.value="";show();break;}case"edit-project-from-view":{const p=geoProjects.find(x=>x.id===e?.dataset?.projectId);if(p)newProject(p);break;}
 case"new-user":toast("La creación de cuentas requiere configurar una invitación segura en Supabase Auth.");break;case"save-user":toast("No se guardan usuarios localmente. Usa invitaciones seguras.");break;case"users-reload":loadGeoUsers();break;case"member-save":saveGeoMember(e?.dataset?.id||"");break;
-case"ops-reload":loadOperationsData(opsProjectId);break;case"ops-new":newOperation();break;case"ops-edit":newOperation(opsRows.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"ops-view":viewOperation(e?.dataset?.id||"");break;case"ops-save":saveOperation(e?.dataset?.id||"");break;case"ops-transition":transitionOperation(e?.dataset?.id||"",e?.dataset?.transition||"");break;case"ops-export":exportOperations();break;case"ops-assign":assignOperation();break;case"ops-assign-save":saveOperationAssignment();break;case"ops-access":manageProjectAccess();break;case"ops-role-edit":manageProjectAccess(opsMembers.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"ops-access-save":saveProjectAccess(e?.dataset?.id||"");break;
+case"ops-reload":loadOperationsData(opsProjectId);break;case"ops-new":newOperation();break;case"ops-edit":newOperation(opsRows.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"ops-view":viewOperation(e?.dataset?.id||"");break;case"ops-save":saveOperation(e?.dataset?.id||"");break;case"ops-export":exportOperations();break;case"ops-assign":assignOperation();break;case"ops-assign-save":saveOperationAssignment();break;case"ops-access":manageProjectAccess();break;case"ops-role-edit":manageProjectAccess(opsMembers.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"ops-access-save":saveProjectAccess(e?.dataset?.id||"");break;
 case"export-csv":exportRecords();break;case"export-users":exportFile("geotracia-usuarios.csv","Nombre,Correo,Rol,Organización,Estado\\n"+users.map(u=>[u.name,u.email,u.role,u.org,u.state].join(",")).join("\\n"),"text/csv");toast("Usuarios exportados");break;
 case"new-road":dialog("Nuevo camino",`<form id="roadForm" class="form-grid">${field("Código","roadCode","Ej. R-720")}${field("Nombre del camino","roadName","Nombre oficial")}${field("Progresiva inicial","roadStart","Km 0+000")}${field("Progresiva final","roadEnd","Km 10+000")}<div class="note full">Formulario de evaluación; persistencia de caminos pendiente.</div></form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="save-road">Validar formulario</button>`);break;
 case"save-road":if(!$("#roadForm").reportValidity())return;$("#dialog").close();toast("Formulario validado; guardado real pendiente");break;
