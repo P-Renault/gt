@@ -18,3 +18,33 @@ body:not(.geo-authenticated) .sidebar,body:not(.geo-authenticated) .main,body:no
 
 /* Read-only account identifier during invitation activation and recovery */
 .auth-form input.auth-readonly{background:#f4f7f9;color:#66798b;border-color:#e2e9ee;cursor:not-allowed}
+
+/* DT-GEO-04.4 — nota de presentación de nombre */
+.auth-name-format-note{margin:-2px 0 12px;color:#718096;font-size:12px;line-height:1.45}
+.auth-name-format-note b{color:#1f536d}
+
+
+/* DT-GEO-04.5 — estado y confirmación personal de identidad */
+.person-name-status{border:1px solid #dbe8ed;border-left:4px solid #8298a7;border-radius:10px;padding:12px 14px;background:#f7fafb;color:#496175;font-size:12px;line-height:1.55}
+.person-name-status[data-status="proposed"]{border-left-color:#c58a2a;background:#fffaf0;color:#79591e}
+.person-name-status[data-status="pending"]{border-left-color:#c58a2a;background:#fffaf0;color:#79591e}
+.person-name-status[data-status="self-declared"]{border-left-color:#3984b8;background:#f2f8fc;color:#315f7d}
+.person-name-status[data-status="confirmed"]{border-left-color:#19856f;background:#f0faf6;color:#236656}
+#userProfileForm [data-action="user-space-confirm-profile"]:disabled{opacity:.55;cursor:not-allowed}
+
+
+/* DT-GEO-04.6 — advertencia para nombres históricos sin identidad estructurada */
+.identity-format-warning{display:block;margin-top:5px;color:#94651c;font-size:11px;line-height:1.45}
+.person-name-status{overflow-wrap:anywhere}
+
+/* GEOTRACIA · aceptación legal versionada */
+.legal-consent,.legal-reaccept{margin:20px 0 4px;padding:16px;border:1px solid #dce9ed;border-radius:12px;background:#f7fbfc}
+.legal-consent-title{margin:0 0 12px!important;color:#173b50!important;font-size:13px!important;font-weight:800}
+.legal-check{display:flex!important;align-items:flex-start;gap:10px;margin:11px 0!important;color:#425b70!important;font-size:12px!important;line-height:1.55}
+.legal-check input{appearance:auto!important;display:block!important;flex:0 0 17px;width:17px!important;min-height:17px!important;height:17px;margin:2px 0 0!important;padding:0!important;accent-color:#078b83;box-shadow:none!important}
+.legal-check a,.legal-doc-links a{color:#087e83;font-weight:700;text-decoration:underline;text-underline-offset:2px}
+.legal-consent small{display:block;margin-top:12px;color:#7a8c99;font-size:10px;line-height:1.5}
+.legal-reaccept h1{font:800 clamp(25px,2.7vw,32px)/1.2 Manrope,sans-serif;color:#102b43;margin:0 0 10px}
+.legal-reaccept>p{font-size:13px;line-height:1.65;color:#718294}
+.legal-doc-links{padding-left:20px;margin:10px 0 18px;font-size:13px}
+.legal-reaccept .auth-submit{margin-top:18px}
