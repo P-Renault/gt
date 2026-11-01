@@ -1168,9 +1168,6 @@ async function saveIncidentStatus(id){const x=incidentRows.find(r=>r.id===id);if
 // Operaciones y permisos: datos persistidos en Supabase, sin registros de muestra.
 let opsProjectId='', opsRows=[], opsAssignments=[], opsMembers=[], opsLoading=false, opsError='', opsRoads=[], opsRoadGeometries={}, opsMapInstance=null, opsMapLayers=[];
 const opsStatusLabel={planned:'Programada',in_progress:'En ejecución',paused:'Pausada',pending_review:'Pendiente de revisión',completed:'Completada',cancelled:'Cancelada'};
-function opsCurrentProjectRole(){return opsMembers.find(m=>m.user_id===geoCurrentUser?.id&&m.active!==false)?.project_role||''}
-function opsCanApprove(){return ['project_admin','supervisor'].includes(opsCurrentProjectRole())}
-function opsTransitionButtons(x){const role=opsCurrentProjectRole(),id=esc(x.id);let html='';if(role==='operator'||role==='supervisor'||role==='project_admin'){if(x.status==='planned')html+=` <button class="btn" data-action="ops-transition" data-id="${id}" data-transition="start">Iniciar</button>`;if(x.status==='in_progress')html+=` <button class="btn" data-action="ops-transition" data-id="${id}" data-transition="pause">Pausar</button> <button class="btn" data-action="ops-transition" data-id="${id}" data-transition="submit_for_review">Enviar a revisión</button>`;if(x.status==='paused')html+=` <button class="btn" data-action="ops-transition" data-id="${id}" data-transition="resume">Reanudar</button> <button class="btn" data-action="ops-transition" data-id="${id}" data-transition="submit_for_review">Enviar a revisión</button>`;}if(opsCanApprove()&&x.status==='pending_review')html+=` <button class="btn primary" data-action="ops-transition" data-id="${id}" data-transition="approve">Aprobar</button> <button class="btn" data-action="ops-transition" data-id="${id}" data-transition="reject">Devolver</button>`;if(opsCanApprove()&&!['completed','cancelled'].includes(x.status))html+=` <button class="btn" data-action="ops-transition" data-id="${id}" data-transition="cancel">Cancelar</button>`;return html}
 const opsTypeLabel={operation:'Operación',service:'Servicio'};
 const opsRoleLabel={project_admin:'Administrador del proyecto',supervisor:'Supervisor',operator:'Operador',viewer:'Solo lectura'};
 function operationsModule(){
@@ -1179,7 +1176,7 @@ function operationsModule(){
  const rows=opsRows;
  const done=rows.filter(x=>x.status==='completed').length, open=rows.filter(x=>['planned','in_progress'].includes(x.status)).length;
  const opts=projects.map(p=>`<option value="${esc(p.id)}" ${p.id===opsProjectId?'selected':''}>${esc(p.code?p.code+' · ':'')}${esc(p.name)}</option>`).join('');
- const table=rows.map(x=>`<tr><td><b>${esc(x.code||'—')}</b><div class="sub">${esc(opsTypeLabel[x.kind]||x.kind)}</div></td><td><b>${esc(x.title)}</b><div class="sub">${esc(opsRoads.find(r=>r.id===x.road_id)?.name||x.location||'Sin ubicación')}<div class="sub">${x.km_progressive==null?'Progresiva no registrada':`Km ${Number(x.km_progressive).toFixed(3)}`}</div></div></td><td>${badge(opsStatusLabel[x.status]||x.status,x.status==='completed'?'success':x.status==='paused'?'warning':x.status==='pending_review'?'warning':'info')}</td><td>${badge(({low:'Baja',normal:'Normal',high:'Alta',critical:'Crítica'})[x.priority]||'Normal',x.priority==='critical'?'danger':x.priority==='high'?'warning':'info')}</td><td>${esc(x.assignee_name||'Sin asignar')}</td><td>${esc(x.start_date||'—')}<div class="sub">Hasta ${esc(x.due_date||'—')}</div></td><td><button class="btn" data-action="ops-view" data-id="${esc(x.id)}">Ver</button> <button class="btn" data-action="ops-edit" data-id="${esc(x.id)}">Editar</button>${opsTransitionButtons(x)}</td></tr>`).join('');
+ const table=rows.map(x=>`<tr><td><b>${esc(x.code||'—')}</b><div class="sub">${esc(opsTypeLabel[x.kind]||x.kind)}</div></td><td><b>${esc(x.title)}</b><div class="sub">${esc(opsRoads.find(r=>r.id===x.road_id)?.name||x.location||'Sin ubicación')}<div class="sub">${x.km_progressive==null?'Progresiva no registrada':`Km ${Number(x.km_progressive).toFixed(3)}`}</div></div></td><td>${badge(opsStatusLabel[x.status]||x.status,x.status==='completed'?'success':x.status==='paused'?'warning':'info')}</td><td>${badge(({low:'Baja',normal:'Normal',high:'Alta',critical:'Crítica'})[x.priority]||'Normal',x.priority==='critical'?'danger':x.priority==='high'?'warning':'info')}</td><td>${esc(x.assignee_name||'Sin asignar')}</td><td>${esc(x.start_date||'—')}<div class="sub">Hasta ${esc(x.due_date||'—')}</div></td><td><button class="btn" data-action="ops-view" data-id="${esc(x.id)}">Ver</button> <button class="btn" data-action="ops-edit" data-id="${esc(x.id)}">Editar</button></td></tr>`).join('');
  return `${head('Operaciones y permisos','Control operativo, servicios, responsables y acceso por proyecto.',btn('↻ Actualizar','ops-reload')+btn('↓ Exportar CSV','ops-export')+btn('＋ Nueva operación','ops-new','primary'))}
  <section class="panel"><div class="panel-head"><div><h2>Proyecto de trabajo</h2><div class="sub">Los registros se consultan desde Supabase y quedan aislados por organización y proyecto.</div></div></div><div class="panel-body"><label class="field-label" for="opsProjectSelect">Proyecto</label><select class="field" id="opsProjectSelect" ${projects.length?'':'disabled'}><option value="">Seleccionar proyecto…</option>${opts}</select>${!window.geoSupabase?'<div class="note">Supabase no está configurado. No se mostrarán datos de ejemplo.</div>':''}${!geoOrg?'<div class="note">No se ha cargado la organización del usuario. Abre Proyectos o inicia sesión.</div>':''}${opsError?`<div class="note">${esc(opsError)}</div>`:''}${opsLoading?'<p class="sub">Cargando operaciones y permisos…</p>':''}</div></section>
  <div class="kpis">${kpi(rows.length,'Operaciones y servicios','Registros del proyecto','▤')}${kpi(open,'Abiertas','Programadas o en ejecución','◷','amber')}${kpi(done,'Completadas','Cierre registrado','✓','teal')}${kpi(opsAssignments.length,'Asignaciones','Responsables y equipos','♙','purple')}</div>
@@ -1227,82 +1224,58 @@ function renderOperationsMap(){
  setTimeout(()=>map.invalidateSize(),160)
 }
 function newOperation(item=null){
- if(!opsProjectId||!geoOrg)return toast('Selecciona un proyecto primero.');const x=item||{};
+ if(!opsProjectId||!geoOrg)return toast('Selecciona un proyecto primero.');
+ const x=item||{};
  const roadOptions=opsRoads.map(r=>`<option value="${esc(r.id)}" ${(x.road_id||'')===r.id?'selected':''}>${esc((r.code?r.code+' · ':'')+r.name)}</option>`).join('');
- dialog(item?'Editar operación o servicio':'Nueva operación o servicio',`<form id="opsForm" class="form-grid">
- <div><label class="field-label" for="opsKind">Tipo</label><select class="field" id="opsKind"><option value="operation" ${x.kind==='operation'?'selected':''}>Operación</option><option value="service" ${x.kind==='service'?'selected':''}>Servicio</option></select></div>
- <div><label class="field-label">Estado actual</label><div class="field" style="display:flex;align-items:center;background:#f1f5f9">${esc(opsStatusLabel[x.status||'planned']||'Programada')}</div><small class="sub">Los cambios de estado se realizan mediante acciones controladas y quedan registrados.</small></div>
- ${field('Código','opsCode','OP-2026-001',x.code||'')}${field('Nombre / actividad','opsTitle','Ej. Inspección de señalización',x.title||'')}
+ const editing=Boolean(item);
+ dialog(editing?'Editar datos de operación':'Nueva operación o servicio',`<form id="opsForm" class="form-grid">
+ ${editing?`<div class="note full">El código y el tipo son datos de creación y no se modifican desde esta pantalla. El estado se controla mediante el flujo de revisión.</div><div><label class="field-label">Código</label><input class="field" value="${esc(x.code||'—')}" disabled></div><div><label class="field-label">Tipo</label><input class="field" value="${esc(opsTypeLabel[x.kind]||x.kind||'—')}" disabled></div>`:`<div><label class="field-label" for="opsKind">Tipo</label><select class="field" id="opsKind"><option value="operation" ${x.kind==='operation'?'selected':''}>Operación</option><option value="service" ${x.kind==='service'?'selected':''}>Servicio</option></select></div><div>${field('Código','opsCode','OP-2026-001',x.code||'')}</div>`}
+ ${field('Nombre / actividad','opsTitle','Ej. Inspección de señalización',x.title||'')}
  <div><label class="field-label" for="opsPriority">Prioridad</label><select class="field" id="opsPriority">${[['low','Baja'],['normal','Normal'],['high','Alta'],['critical','Crítica']].map(([v,l])=>`<option value="${v}" ${(x.priority||'normal')===v?'selected':''}>${l}</option>`).join('')}</select></div>
  <div class="full"><label class="field-label" for="opsRoadId">Camino del proyecto</label><select class="field" id="opsRoadId" required><option value="">Seleccionar camino…</option>${roadOptions}</select><small class="sub">Solo se muestran caminos registrados en el proyecto seleccionado.</small></div>
- <div class="full"><label class="field-label" for="opsKmProgressive">Progresiva del punto (km)</label><input class="field" id="opsKmProgressive" type="number" min="0" step="0.001" inputmode="decimal" placeholder="Ej. 12.300" value="${x.km_progressive==null?'':esc(x.km_progressive)}" required><small class="sub">Ingresa kilómetros decimales: 12+300 se registra como 12.300 km. El punto se calcula sobre la geometría del camino.</small><div id="opsProgressHint" class="sub" style="margin-top:5px"></div></div>
+ <div class="full"><label class="field-label" for="opsKmProgressive">Progresiva del punto (km)</label><input class="field" id="opsKmProgressive" type="number" min="0" step="0.001" inputmode="decimal" placeholder="Ej. 12.300" value="${x.km_progressive==null?'':esc(x.km_progressive)}" required><small class="sub">Ingresa kilómetros decimales: 12+300 se registra como 12.300 km.</small><div id="opsProgressHint" class="sub" style="margin-top:5px"></div></div>
  ${field('Responsable','opsAssignee','Nombre del responsable',x.assignee_name||'')}
  <div><label class="field-label" for="opsStart">Fecha de inicio</label><input class="field" id="opsStart" type="date" value="${esc(x.start_date||'')}"></div><div><label class="field-label" for="opsDue">Fecha límite</label><input class="field" id="opsDue" type="date" value="${esc(x.due_date||'')}"></div>
  <div class="full"><label class="field-label" for="opsDescription">Descripción y alcance</label><textarea class="field" id="opsDescription" rows="3">${esc(x.description||'')}</textarea></div><div class="full"><label class="field-label" for="opsNotes">Notas de ejecución</label><textarea class="field" id="opsNotes" rows="2">${esc(x.notes||'')}</textarea></div>
- <div class="full" style="background:#f1f5f9;border-radius:10px;padding:10px"><b>Ubicación cartográfica</b><div class="sub">Al guardar, el marcador se ubicará sobre el camino y progresiva seleccionados en el mapa del módulo.</div></div><div class="full sub" id="opsSaveStatus" role="status" aria-live="polite"></div>
+ <div class="full" style="background:#f1f5f9;border-radius:10px;padding:10px"><b>Ubicación cartográfica</b><div class="sub">El marcador se ubicará sobre el camino y progresiva seleccionados.</div></div><div class="full sub" id="opsSaveStatus" role="status" aria-live="polite"></div>
  </form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="ops-save" data-id="${esc(x.id||'')}">Guardar en Supabase</button>`);
- const roadSel=$('#opsRoadId'),kmInput=$('#opsKmProgressive'),hint=$('#opsProgressHint');const validateKm=()=>{const r=opsRoads.find(a=>a.id===roadSel?.value),v=kmInput?.value===''?null:Number(kmInput?.value);if(!hint)return;const length=Number(r?.length_m||r?.official_length_m||r?.geometry_length_m||0)/1000;if(!r){hint.textContent='Selecciona primero el camino.';return}if(v==null||!Number.isFinite(v)||v<0){hint.textContent='Ingresa la progresiva del punto en km.';return}if(length>0&&v>length){hint.textContent=`La progresiva supera la longitud registrada del camino (${length.toFixed(3)} km).`;return}const g=opsRoadGeometries[r.id];const pt=g?inventoryLinePoint(g.geojson?.type==='Feature'?g.geojson.geometry:g.geojson,v,g.length_m):null;hint.textContent=pt?'Punto calculable sobre la geometría vial.':`Camino seleccionado${length>0?` · longitud de referencia ${length.toFixed(3)} km`:''}. La ubicación requiere geometría vial válida.`};roadSel?.addEventListener('change',validateKm);kmInput?.addEventListener('input',validateKm);validateKm();
+ const roadSel=$('#opsRoadId'),kmInput=$('#opsKmProgressive'),hint=$('#opsProgressHint');
+ const validateKm=()=>{const r=opsRoads.find(a=>a.id===roadSel?.value),v=kmInput?.value===''?null:Number(kmInput?.value);if(!hint)return;if(!r){hint.textContent='Selecciona primero el camino.';return}if(v==null||!Number.isFinite(v)||v<0){hint.textContent='Ingresa la progresiva del punto en km.';return}const length=Number(r.length_m||r.official_length_m||r.geometry_length_m||0)/1000;if(length>0&&v>length){hint.textContent=`La progresiva supera la longitud registrada (${length.toFixed(3)} km).`;return}const g=opsRoadGeometries[r.id];const pt=g?inventoryLinePoint(g.geojson?.type==='Feature'?g.geojson.geometry:g.geojson,v,g.length_m):null;hint.textContent=pt?'Punto calculable sobre la geometría vial.':`Camino seleccionado${length>0?` · longitud ${length.toFixed(3)} km`:''}. Se requiere geometría vial válida.`};
+ roadSel?.addEventListener('change',validateKm);kmInput?.addEventListener('input',validateKm);validateKm();
 }
 async function saveOperation(id=''){
- const f=$('#opsForm');
- const saveBtn=$('#dialogFoot [data-action="ops-save"]');
- const status=$('#opsSaveStatus');
- const report=(message)=>{if(status)status.textContent=message;toast(message)};
- if(!f){report('No se encontró el formulario de operación. Cierra la ventana y vuelve a abrirla.');return}
- if(!f.reportValidity()){report('Revisa los campos obligatorios del formulario.');return}
- if(!window.geoSupabase){report('Supabase no está disponible. Revisa la conexión e inténtalo nuevamente.');return}
- if(!geoOrg?.id){report('No hay una organización activa seleccionada.');return}
- if(!opsProjectId){report('Selecciona un proyecto antes de guardar la operación.');return}
- const title=$('#opsTitle')?.value.trim();
- const start=$('#opsStart')?.value||null;
- const due=$('#opsDue')?.value||null;
- if(!title){report('Ingresa el nombre de la operación.');return}
- if(start&&due&&due<start){report('La fecha límite no puede ser anterior al inicio.');return}
- const roadId=$('#opsRoadId')?.value||null;
- const road=opsRoads.find(r=>r.id===roadId);
- if(!roadId||!road){report('Selecciona un camino válido del proyecto.');return}
- const kmRaw=$('#opsKmProgressive')?.value;
- const km=kmRaw===''||kmRaw==null?null:Number(kmRaw);
- if(km==null||!Number.isFinite(km)||km<0){report('Ingresa una progresiva válida en kilómetros.');return}
- const roadLength=Number(road.length_m||road.official_length_m||road.geometry_length_m||0)/1000;
- if(roadLength>0&&km>roadLength){report(`La progresiva supera la longitud del camino (${roadLength.toFixed(3)} km).`);return}
- const geometry=opsRoadGeometries[roadId];
- let geojson=geometry?.geojson;
- if(typeof geojson==='string'){try{geojson=JSON.parse(geojson)}catch{geojson=null}}
- if(geojson?.type==='Feature')geojson=geojson.geometry;
- const point=geometry&&geojson?inventoryLinePoint(geojson,km,geometry.length_m):null;
- if(!point){report('No se pudo calcular el punto sobre la geometría del camino. Verifica que el camino tenga geometría válida y que el módulo haya cargado sus datos.');return}
- const payload={road_id:roadId,km_progressive:km,kind:$('#opsKind')?.value||'operation',code:$('#opsCode')?.value.trim()||null,title,location:road.name||road.code||null,assignee_name:$('#opsAssignee')?.value.trim()||null,priority:$('#opsPriority')?.value||'normal',start_date:start,due_date:due,description:$('#opsDescription')?.value.trim()||null,notes:$('#opsNotes')?.value.trim()||null};
- try{
-  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Guardando…'}
-  if(status)status.textContent='Guardando operación en Supabase…';
-  let q=id?window.geoSupabase.from('geotracia_operations').update(payload).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',opsProjectId):window.geoSupabase.from('geotracia_operations').insert({...payload,organization_id:geoOrg.id,project_id:opsProjectId,created_by:geoCurrentUser?.id||null});
-  const result=await q.select('id').maybeSingle();
-  if(result.error)throw result.error;
-  if(id&&!result.data){throw new Error('No se actualizó ningún registro. Comprueba los permisos de edición (RLS) y que la operación pertenezca al proyecto activo.')}
-  try{await window.geoSupabase.from('audit_logs').insert({organization_id:geoOrg.id,actor_id:geoCurrentUser?.id||null,action:id?'operation.updated':'operation.created',entity_table:'geotracia_operations',entity_id:result.data?.id||id||null,details:{project_id:opsProjectId,title,kind:payload.kind,status:payload.status}})}catch(auditError){console.warn('[GEOTRACIA] No se pudo registrar auditoría de operación',auditError)}
-  $('#dialog').close();toast('Operación guardada correctamente.');await loadOperationsData(opsProjectId);
-  if(!opsRows.some(x=>x.id===(result.data?.id||id))){console.warn('[GEOTRACIA] La operación se guardó, pero no aparece en la recarga de la lista.',result.data)}
- }catch(e){console.error('[GEOTRACIA] Error al guardar operación',e);report('No se pudo guardar la operación: '+(e?.message||'error desconocido de Supabase'));}
+ const f=$('#opsForm'),saveBtn=$('#dialogFoot [data-action="ops-save"]'),status=$('#opsSaveStatus');
+ const report=message=>{if(status)status.textContent=message;toast(message)};
+ if(!f)return report('No se encontró el formulario de operación.');if(!f.reportValidity())return report('Revisa los campos obligatorios.');
+ if(!window.geoSupabase||!geoOrg?.id||!opsProjectId)return report('La sesión, Supabase o el proyecto no están disponibles.');
+ const title=$('#opsTitle')?.value.trim(),start=$('#opsStart')?.value||null,due=$('#opsDue')?.value||null;
+ if(!title)return report('Ingresa el nombre de la operación.');if(start&&due&&due<start)return report('La fecha límite no puede ser anterior al inicio.');
+ const roadId=$('#opsRoadId')?.value||null,road=opsRoads.find(r=>r.id===roadId);if(!road)return report('Selecciona un camino válido del proyecto.');
+ const kmRaw=$('#opsKmProgressive')?.value,km=kmRaw===''||kmRaw==null?null:Number(kmRaw);if(km==null||!Number.isFinite(km)||km<0)return report('Ingresa una progresiva válida en kilómetros.');
+ const roadLength=Number(road.length_m||road.official_length_m||road.geometry_length_m||0)/1000;if(roadLength>0&&km>roadLength)return report(`La progresiva supera la longitud del camino (${roadLength.toFixed(3)} km).`);
+ let geojson=opsRoadGeometries[roadId]?.geojson;if(typeof geojson==='string'){try{geojson=JSON.parse(geojson)}catch{geojson=null}}if(geojson?.type==='Feature')geojson=geojson.geometry;
+ if(!geojson||!inventoryLinePoint(geojson,km,opsRoadGeometries[roadId]?.length_m))return report('No se pudo calcular el punto sobre la geometría del camino.');
+ const common={road_id:roadId,km_progressive:km,title,location:road.name||road.code||null,assignee_name:$('#opsAssignee')?.value.trim()||null,priority:$('#opsPriority')?.value||'normal',start_date:start,due_date:due,description:$('#opsDescription')?.value.trim()||null,notes:$('#opsNotes')?.value.trim()||null};
+ const payload=id?common:{organization_id:geoOrg.id,project_id:opsProjectId,kind:$('#opsKind')?.value||'operation',code:$('#opsCode')?.value.trim()||null,...common,created_by:geoCurrentUser?.id||null};
+ try{if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Guardando…'}if(status)status.textContent='Guardando datos operativos…';
+  const q=id?window.geoSupabase.from('geotracia_operations').update(payload).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',opsProjectId):window.geoSupabase.from('geotracia_operations').insert(payload);
+  const result=await q.select('id').maybeSingle();if(result.error)throw result.error;if(id&&!result.data)throw new Error('No se actualizó ningún registro. Comprueba tu permiso operations.update.');
+  try{await window.geoSupabase.from('audit_logs').insert({organization_id:geoOrg.id,actor_id:geoCurrentUser?.id||null,action:id?'operation.updated':'operation.created',entity_table:'geotracia_operations',entity_id:result.data?.id||id||null,details:{project_id:opsProjectId,title,kind:id?opsRows.find(o=>o.id===id)?.kind:payload.kind}})}catch(auditError){console.warn('[GEOTRACIA] Auditoría complementaria no disponible',auditError)}
+  $('#dialog').close();toast(id?'Datos de operación actualizados.':'Operación creada en estado Programada.');await loadOperationsData(opsProjectId);
+ }catch(e){console.error('[GEOTRACIA] Error al guardar operación',e);report('No se pudo guardar: '+(e?.message||'error desconocido de Supabase'));}
  finally{if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Guardar en Supabase'}}
 }
-function viewOperation(id){
- const x=opsRows.find(r=>r.id===id);if(!x)return toast('No se encontró la operación.');
- const road=opsRoads.find(r=>r.id===x.road_id);
- dialog(esc(x.title),`<div class="form-grid"><div><label class="field-label">Código</label>${esc(x.code||'—')}</div><div><label class="field-label">Tipo</label>${esc(opsTypeLabel[x.kind]||x.kind)}</div><div class="full"><label class="field-label">Estado</label>${esc(opsStatusLabel[x.status]||x.status)}</div><div class="full"><label class="field-label">Camino</label>${esc(road?.code||'—')} · ${esc(road?.name||x.location||'')}</div><div><label class="field-label">Progresiva</label>${x.km_progressive==null?'—':Number(x.km_progressive).toFixed(3)+' km'}</div><div><label class="field-label">Responsable</label>${esc(x.assignee_name||'Sin asignar')}</div><div><label class="field-label">Prioridad</label>${esc(({low:'Baja',normal:'Normal',high:'Alta',critical:'Crítica'})[x.priority]||x.priority||'Normal')}</div><div><label class="field-label">Fechas</label>${esc(x.start_date||'—')} a ${esc(x.due_date||'—')}</div><div class="full"><label class="field-label">Descripción</label><p>${esc(x.description||'—')}</p></div><div class="full"><label class="field-label">Notas</label><p>${esc(x.notes||'—')}</p></div></div>`,`<button class="btn" data-close>Cerrar</button>`)
+async function viewOperation(id){
+ const op=opsRows.find(x=>x.id===id);if(!op)return toast('No se encontró la operación.');
+ dialog('Detalle y flujo de revisión',`<div class="stack"><div><b>${esc(op.code||'Sin código')} · ${esc(op.title)}</b><div class="sub">${esc(opsTypeLabel[op.kind]||op.kind)} · ${esc(opsStatusLabel[op.status]||op.status)}</div></div><div class="note">Responsable: ${esc(op.assignee_name||'Sin asignar')} · Prioridad: ${esc(op.priority||'normal')}<br>Inicio: ${esc(op.start_date||'—')} · Fecha límite: ${esc(op.due_date||'—')}<br>Ubicación: ${esc(op.location||'—')} · Progresiva: ${op.km_progressive==null?'—':Number(op.km_progressive).toFixed(3)+' km'}</div><div><b>Descripción</b><p>${esc(op.description||'Sin descripción')}</p><b>Notas</b><p>${esc(op.notes||'Sin notas')}</p></div><div id="opsReviewHistory" class="sub">Cargando historial de revisión…</div></div>`,`<button class="btn" data-close>Cerrar</button>${op.status==='planned'?`<button class="btn primary" data-action="ops-transition" data-id="${esc(id)}" data-transition="start">Iniciar</button>`:''}${op.status==='in_progress'?`<button class="btn" data-action="ops-transition" data-id="${esc(id)}" data-transition="pause">Pausar</button><button class="btn primary" data-action="ops-transition" data-id="${esc(id)}" data-transition="submit_for_review">Enviar a revisión</button>`:''}${op.status==='paused'?`<button class="btn" data-action="ops-transition" data-id="${esc(id)}" data-transition="resume">Reanudar</button><button class="btn primary" data-action="ops-transition" data-id="${esc(id)}" data-transition="submit_for_review">Enviar a revisión</button>`:''}${op.status==='pending_review'?`<button class="btn" data-action="ops-transition" data-id="${esc(id)}" data-transition="reject">Devolver</button><button class="btn primary" data-action="ops-transition" data-id="${esc(id)}" data-transition="approve">Aprobar y completar</button>`:''}${!['completed','cancelled'].includes(op.status)?`<button class="btn danger" data-action="ops-transition" data-id="${esc(id)}" data-transition="cancel">Cancelar</button>`:''}`);
+ try{const {data,error}=await window.geoSupabase.from('geotracia_operation_reviews').select('action,from_status,to_status,comment,created_at,actor_id').eq('operation_id',id).order('created_at',{ascending:false}).limit(50);if(error)throw error;const target=$('#opsReviewHistory');if(target)target.innerHTML=`<b>Historial de revisión</b>${(data||[]).length?`<ul>${data.map(r=>`<li>${esc(new Date(r.created_at).toLocaleString('es-CL'))}: ${esc(r.action)} (${esc(opsStatusLabel[r.from_status]||r.from_status)} → ${esc(opsStatusLabel[r.to_status]||r.to_status)})${r.comment?`<div>${esc(r.comment)}</div>`:''}</li>`).join('')}</ul>`:'<p>Sin transiciones registradas.</p>'}`;}catch(e){const target=$('#opsReviewHistory');if(target)target.textContent='No fue posible consultar el historial: '+(e?.message||'error');}
 }
 async function transitionOperation(id,action){
- const operation=opsRows.find(x=>x.id===id);if(!operation)return toast('No se encontró la operación.');
- let comment=null;
- if(action==='reject'){comment=window.prompt('Indica el motivo de devolución al operador:');if(comment===null)return;if(!comment.trim())return toast('El motivo de devolución es obligatorio.');}
- if(action==='cancel'){comment=window.prompt('Motivo de cancelación (obligatorio):');if(comment===null)return;if(!comment.trim())return toast('El motivo de cancelación es obligatorio.');}
- const labels={start:'iniciar la operación',pause:'pausar la operación',resume:'reanudar la operación',submit_for_review:'enviar la operación a revisión',approve:'aprobar y completar la operación',reject:'devolver la operación al operador',cancel:'cancelar la operación'};
- if(!window.confirm(`¿Confirmas ${labels[action]||'esta acción'}?`))return;
- try{
-  const {data,error}=await window.geoSupabase.rpc('geotracia_transition_operation',{p_operation_id:id,p_action:action,p_comment:comment});
-  if(error)throw error;
-  $('#dialog')?.close?.();toast(data?.message||'Estado actualizado y registrado.');await loadOperationsData(opsProjectId);
- }catch(e){console.error('[GEOTRACIA] Error en transición de operación',e);toast('No se pudo cambiar el estado: '+(e?.message||'error de Supabase'));}
+ if(!window.geoSupabase)return toast('Supabase no está disponible.');
+ const commentsRequired=['reject','cancel'].includes(action);let comment=null;
+ if(commentsRequired){comment=window.prompt(action==='reject'?'Indica el motivo de devolución:':'Indica el motivo de cancelación:');if(comment===null)return;if(!comment.trim())return toast('Debes ingresar un comentario para esta acción.');}
+ try{const {data,error}=await window.geoSupabase.rpc('geotracia_transition_operation',{p_operation_id:id,p_action:action,p_comment:comment});if(error)throw error;if(data?.ok===false)throw new Error(data.message||'Transición rechazada.');toast(data?.message||'Estado actualizado.');if($('#dialog')?.open)$('#dialog').close();await loadOperationsData(opsProjectId);}
+ catch(e){console.error('[GEOTRACIA] Error en transición de operación',e);toast('No se pudo cambiar el estado: '+(e?.message||'error de Supabase'));}
 }
 function assignOperation(){
  if(!geoOrg?.id)return toast('Selecciona una organización antes de asignar responsables.');
