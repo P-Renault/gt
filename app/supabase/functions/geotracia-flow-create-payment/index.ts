@@ -76,17 +76,20 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: "ORGANIZATION_ACCESS_DENIED", stage }, 403);
 
     stage = "plan_lookup";
-    // La migración de Geotracia define id TEXT, active y custom_limits.
+    // Esquema confirmado: id UUID, is_custom, is_active y active.
     const { data: plan, error: planError } = await db.from("geotracia_subscription_plans")
-      .select("id,name,monthly_price_clp,annual_price_clp,max_operators,custom_limits,features,active")
+      .select("id,code,name,monthly_price_clp,annual_price_clp,max_operators,features,is_custom,is_active,active")
       .eq("id", planId).maybeSingle();
     if (planError) {
       safeError(stage, planError);
       return json({ ok: false, error: "PLAN_QUERY_FAILED", stage, db_code: planError.code ?? null }, 500);
     }
     if (!plan) return json({ ok: false, error: "PLAN_NOT_FOUND", stage }, 404);
-    if (plan.active !== true) return json({ ok: false, error: "PLAN_INACTIVE", stage }, 400);
-    if (plan.custom_limits === true || String(plan.id).toLowerCase() === "institucional")
+    // is_active es la bandera canónica; active se conserva por compatibilidad.
+    if (plan.is_active !== true || plan.active === false)
+      return json({ ok: false, error: "PLAN_INACTIVE", stage }, 400);
+    const planCode = String(plan.code ?? "").trim().toLowerCase();
+    if (plan.is_custom === true || ["institucional", "institutional"].includes(planCode))
       return json({ ok: false, error: "PLAN_REQUIRES_COMMERCIAL_PROPOSAL", stage }, 400);
 
     stage = "price_validation";
@@ -147,9 +150,12 @@ Deno.serve(async (req: Request) => {
         flow_message: flowMessage, amount_clp: amount }, 502);
     }
 
-    const token = String(flowData.token ?? "");
-    const checkoutUrl = String(flowData.url ?? "");
-    if (!token || !checkoutUrl) return json({ ok: false, error: "FLOW_CHECKOUT_DATA_MISSING", stage }, 502);
+    const token = String(flowData.token ?? "").trim();
+    const checkoutUrl = String(flowData.url ?? "").trim();
+    const flowOrder = String(flowData.flowOrder ?? "").trim();
+    // flowOrder es necesario para correlacionar el pago en el webhook y en la RPC.
+    if (!token || !checkoutUrl || !flowOrder)
+      return json({ ok: false, error: "FLOW_CHECKOUT_DATA_MISSING", stage, payment_id: payment.id }, 502);
     let checkout: URL;
     try { checkout = new URL(checkoutUrl); }
     catch { return json({ ok: false, error: "FLOW_CHECKOUT_URL_INVALID", stage }, 502); }
