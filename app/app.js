@@ -13,6 +13,7 @@ const modules=[
 ["mantenimiento","Mantenimiento","⚒","Planifica intervenciones, recursos, prioridades y ejecución."],
 ["formularios","Formularios y fichas","▧","Gestiona formularios técnicos y fichas configurables de terreno."],
 ["operaciones","Operaciones y permisos","♢","Control operativo, asignaciones y permisos por proyecto."],
+["equipos","Equipos de trabajo","♧","Administra equipos, integrantes y funciones dentro de cada proyecto."],
 ["offline","Trabajo sin conexión","☁","Administra registros locales, mapas descargados y sincronización."],
 ["informes","Informes y exportaciones","▥","Construye informes, analiza resultados y prepara exportaciones."],
 ["configuracion","Configuración y auditoría","⚙","Parámetros del proyecto, fuentes cartográficas, capas y trazabilidad."],
@@ -45,6 +46,7 @@ let inventoryProjectId="", inventoryRoads=[], inventorySegments=[], inventoryRow
 let incidentProjectId="", incidentRoads=[], incidentSegments=[], incidentRows=[], incidentLoading=false, incidentError="", incidentMapInstance=null, incidentMapMarkers={}, selectedIncidentId="", incidentPhotoFile=null, incidentPhotoPreviewUrl="", incidentRoadGeometries={};
 let maintenanceProjectId="", maintenanceRoads=[], maintenanceSegments=[], maintenanceRows=[], maintenanceLoading=false, maintenanceError="", maintenanceRoadGeometries={}, maintenanceMapInstance=null, maintenanceMapLayers=[];
 let formsProjectId="", formTemplates=[], formSubmissions=[], formsLoading=false, formsError="";
+let teamProjectId="", teamRows=[], teamMemberRows=[], teamDirectoryRows=[], teamAccessRows=[], teamLoading=false, teamError="";
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const mod=id=>modules.find(m=>m[0]===id)||modules[0];
 const save=()=>{try{localStorage.setItem("geo.records",JSON.stringify(records));localStorage.setItem("geo.users",JSON.stringify(users))}catch{}};
@@ -1177,6 +1179,121 @@ async function viewIncident(id){const x=incidentRows.find(r=>r.id===id);if(!x)re
 function editIncidentStatus(id){const x=incidentRows.find(r=>r.id===id);if(!x)return;dialog('Actualizar estado de incidencia',`<div class="form-grid"><div class="full"><label class="field-label" for="icStatusOnly">Estado</label><select class="field" id="icStatusOnly">${[['open','Abierta'],['in_progress','En atención'],['resolved','Resuelta'],['closed','Cerrada']].map(([a,b])=>`<option value="${a}" ${x.status===a?'selected':''}>${b}</option>`).join('')}</select></div></div>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="incident-status-save" data-id="${esc(id)}">Guardar estado</button>`)}
 async function saveIncidentStatus(id){const x=incidentRows.find(r=>r.id===id);if(!x||!window.geoSupabase)return;const status=$('#icStatusOnly')?.value;if(!status)return;const {error}=await window.geoSupabase.from('road_incidents').update({status,updated_at:new Date().toISOString()}).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',incidentProjectId);if(error)return toast('No se pudo actualizar el estado: '+error.message);$('#dialog').close();toast('Estado de incidencia actualizado');await loadIncidentData(incidentProjectId)}
 // Operaciones y permisos: datos persistidos en Supabase, sin registros de muestra.
+// Administración de equipos por proyecto. Los identificadores y relaciones se fijan al crear;
+// las actualizaciones usan exclusivamente las columnas autorizadas por los GRANT de Supabase.
+function teamsModule(){
+ const projects=geoProjects.filter(p=>p.status!=='archived');
+ const selected=projects.find(p=>p.id===teamProjectId);
+ const activeTeams=teamRows.filter(t=>t.active!==false);
+ const activeMembers=teamMemberRows.filter(m=>m.active===true);
+ const projectOptions=projects.map(p=>`<option value="${esc(p.id)}" ${p.id===teamProjectId?'selected':''}>${esc(p.code?p.code+' · ':'')}${esc(p.name)}</option>`).join('');
+ const cards=teamRows.map(team=>{
+  const members=teamMemberRows.filter(m=>m.team_id===team.id);
+  const visible=members;
+  const initials=(name='')=>String(name).trim().split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase()||'U';
+  const typeClass=({'field':'field','topography':'topography','laboratory':'laboratory'})[team.team_type]||'';
+  const typeLabel=({'field':'Terreno','topography':'Topografía','laboratory':'Laboratorio','inspection':'Inspección','maintenance':'Mantenimiento','administration':'Administración','other':'Otro'})[team.team_type]||team.team_type||'Otro';
+  return `<article class="team-card ${team.active===false?'team-card-inactive':''}">
+   <div class="team-card-head"><div class="team-type-icon team-type-${typeClass}">♧</div><div class="team-card-title"><div><div class="eyebrow">${esc(typeLabel)}</div><h3>${esc(team.name)}</h3></div><span class="team-code">${esc(team.code)}</span></div>${team.active===false?'<span class="team-inactive-badge">Inactivo</span>':badge('Activo','success')}</div>
+   ${team.description?`<p class="team-description">${esc(team.description)}</p>`:''}
+   <div class="team-members"><div class="team-members-head"><b>Integrantes</b><span>${visible.length} activos · ${members.length} total</span></div>
+   ${visible.map(m=>{const person=teamDirectoryRows.find(x=>x.user_id===m.user_id)||{};const name=person.display_name||person.full_name||person.name||person.email||'Miembro';return `<div class="team-member-row"><span class="team-member-avatar">${esc(initials(name))}</span><span class="team-member-copy"><b>${esc(name)}</b><small>${esc(person.email||m.user_id)} · ${esc(m.team_role||'member')} · ${m.active===true?'Activo':'Inactivo'}</small></span><button class="team-remove" title="Editar integrante" aria-label="Editar integrante" data-action="team-member-edit" data-id="${esc(m.id)}">✎</button></div>`}).join('')||'<div class="team-empty">No hay integrantes activos en este equipo.</div>'}
+   </div><div class="team-card-actions"><button class="btn" data-action="team-member-new" data-team-id="${esc(team.id)}" ${team.active===false?'disabled':''}>＋ Agregar integrante</button><button class="btn" data-action="team-edit" data-id="${esc(team.id)}">Editar equipo</button><button class="btn ${team.active===false?'':'danger-btn'}" data-action="team-toggle" data-id="${esc(team.id)}">${team.active===false?'Activar':'Desactivar'}</button></div>
+  </article>`;
+ }).join('');
+ return `${head('Equipos de trabajo','Organiza responsables e integrantes por proyecto. Los cambios se guardan en Supabase y se validan mediante RLS.',btn('↻ Actualizar','teams-reload')+btn('＋ Crear equipo','team-new','primary',teamProjectId?'':'disabled'))}
+ <section class="team-project-bar"><label class="field-label" for="teamsProjectSelect">Proyecto seleccionado<select class="field" id="teamsProjectSelect" ${projects.length?'':'disabled'}><option value="">Seleccionar proyecto…</option>${projectOptions}</select></label><div class="team-project-meta"><span class="team-meta-label">Organización</span><b>${esc(geoOrg?.name||'No disponible')}</b><small>${selected?esc(selected.name):'Selecciona un proyecto para administrar sus equipos.'}</small></div></section>
+ ${teamError?`<div class="note danger-note" role="alert">${esc(teamError)}</div>`:''}
+ ${!geoOrg?'<div class="team-notice"><b>Sesión requerida</b><span>No se encontró una organización activa. Inicia sesión y vuelve a abrir el módulo.</span></div>':''}
+ ${!projects.length&&geoOrg?'<div class="team-notice"><b>Sin proyectos</b><span>Crea primero un proyecto en el módulo Proyectos para registrar equipos.</span></div>':''}
+ <div class="kpis">${kpi(teamLoading?'…':teamRows.length,'Equipos registrados','Proyecto seleccionado','♧')}${kpi(teamLoading?'…':activeTeams.length,'Equipos activos','Disponibles para operación','✓','teal')}${kpi(teamLoading?'…':activeMembers.length,'Integrantes activos','Asignados a equipos','♙','purple')}${kpi(teamLoading?'…':teamRows.filter(t=>t.active===false).length,'Equipos inactivos','Conservados en el historial','◷','amber')}</div>
+ ${teamLoading?'<section class="panel"><div class="panel-body">Consultando equipos e integrantes en Supabase…</div></section>':`<div class="team-grid">${cards||'<div class="team-empty team-no-data">'+(teamProjectId?'Este proyecto todavía no tiene equipos. Utiliza “Crear equipo” para comenzar.':'Selecciona un proyecto para consultar sus equipos.')+'</div>'}</div>`}
+ <div class="team-notice" style="margin-top:16px"><b>Control de acceso</b><span>La creación, edición y administración de integrantes depende de las políticas RLS de la organización y del proyecto. Los equipos se desactivan en lugar de eliminarse para conservar su historial.</span></div>`;
+}
+async function loadTeamsData(projectId=teamProjectId){
+ teamProjectId=projectId||'';teamRows=[];teamMemberRows=[];teamDirectoryRows=[];teamAccessRows=[];teamError='';
+ const c=window.geoSupabase;if(!c){teamError='Supabase no está configurado.';show();return}
+ try{
+  if(!geoProjects.length)await loadGeoProjects();
+  if(!geoOrg?.id)throw new Error('No se encontró una organización activa para esta cuenta.');
+  const projects=geoProjects.filter(p=>p.status!=='archived');
+  if(!teamProjectId)teamProjectId=projects[0]?.id||'';
+  if(!teamProjectId){teamError='Crea o activa un proyecto antes de administrar equipos.';show();return}
+  if(!projects.some(p=>p.id===teamProjectId))throw new Error('El proyecto seleccionado no pertenece a la organización activa.');
+  teamLoading=true;show();
+  const [teams,members,directory,access]=await Promise.all([
+   c.from('geotracia_project_teams').select('*').eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).order('name'),
+   c.from('geotracia_project_team_members').select('*').eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).order('assigned_at'),
+   c.rpc('geotracia_org_member_directory',{p_organization_id:geoOrg.id}),
+   c.from('geotracia_project_access').select('user_id,display_name,email,project_role,active').eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).eq('active',true)
+  ]);
+  if(teams.error)throw new Error('No se pudieron consultar los equipos: '+teams.error.message);
+  if(members.error)throw new Error('No se pudieron consultar los integrantes: '+members.error.message);
+  if(directory.error)throw new Error('No se pudo consultar el directorio de miembros: '+directory.error.message);
+  if(access.error)throw new Error('No se pudieron consultar los accesos del proyecto: '+access.error.message);
+  teamRows=teams.data||[];teamMemberRows=members.data||[];
+  teamDirectoryRows=(directory.data||[]).map(m=>({...m,display_name:m.display_name||m.full_name||m.name||'Miembro'}));
+  teamAccessRows=access.data||[];
+ }catch(e){teamError=e?.message||'No fue posible cargar los equipos.';console.error('[GEOTRACIA] Error cargando equipos',e)}
+ finally{teamLoading=false;if(active==='equipos')show()}
+}
+function teamForm(item=null){
+ const x=item||{};const value=(k,d='')=>x[k]??d;
+ dialog(item?'Editar equipo':'Crear equipo',`<form id="teamForm" class="form-grid">
+ <div><label class="field-label" for="teamCode">Código *</label><input class="field" id="teamCode" required maxlength="40" value="${esc(value('code'))}" placeholder="Ej. EQ-TER-01"></div>
+ <div><label class="field-label" for="teamName">Nombre del equipo *</label><input class="field" id="teamName" required maxlength="120" value="${esc(value('name'))}" placeholder="Ej. Equipo de terreno"></div>
+ <div><label class="field-label" for="teamType">Tipo de equipo</label><select class="field" id="teamType">${[['field','Terreno'],['topography','Topografía'],['laboratory','Laboratorio'],['inspection','Inspección'],['maintenance','Mantenimiento'],['administration','Administración'],['other','Otro']].map(([v,l])=>`<option value="${v}" ${value('team_type','other')===v?'selected':''}>${l}</option>`).join('')}</select></div>
+ <div><label class="field-label" for="teamActive">Estado</label><select class="field" id="teamActive"><option value="true" ${value('active',true)!==false?'selected':''}>Activo</option><option value="false" ${value('active',true)===false?'selected':''}>Inactivo</option></select></div>
+ <div class="full"><label class="field-label" for="teamDescription">Descripción</label><textarea class="field" id="teamDescription" rows="3" maxlength="1000" placeholder="Funciones y responsabilidades del equipo">${esc(value('description'))}</textarea></div>
+ <div class="note full">El equipo quedará vinculado al proyecto seleccionado. Su organización y proyecto no podrán cambiarse después de crearlo.</div><div class="full sub" id="teamFormStatus" role="status" aria-live="polite"></div></form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="team-save" data-id="${esc(x.id||'')}">Guardar equipo</button>`);
+}
+async function saveTeam(id=''){
+ const form=$('#teamForm'),button=$('#dialogFoot [data-action="team-save"]'),status=$('#teamFormStatus');
+ if(!form?.reportValidity())return;if(!geoOrg?.id||!teamProjectId)return toast('Selecciona una organización y un proyecto.');
+ const code=$('#teamCode').value.trim(),name=$('#teamName').value.trim();
+ if(teamRows.some(t=>String(t.code).toLowerCase()===code.toLowerCase()&&t.id!==id))return toast('Ya existe un equipo con ese código en este proyecto.');
+ const payload={code,name,team_type:$('#teamType').value,description:$('#teamDescription').value.trim()||null,active:$('#teamActive').value==='true',updated_at:new Date().toISOString()};
+ if(!id){payload.organization_id=geoOrg.id;payload.project_id=teamProjectId;payload.created_by=geoCurrentUser?.id||null;}
+ try{if(button){button.disabled=true;button.textContent='Guardando…'}if(status)status.textContent='Guardando equipo en Supabase…';
+  const q=id?await window.geoSupabase.from('geotracia_project_teams').update(payload).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).select('id').maybeSingle():await window.geoSupabase.from('geotracia_project_teams').insert(payload).select('id').single();
+  if(q.error)throw q.error;if(id&&!q.data)throw new Error('No se actualizó el equipo. Comprueba tus permisos de administración.');
+  $('#dialog').close();toast(id?'Equipo actualizado correctamente.':'Equipo creado correctamente.');await loadTeamsData(teamProjectId);
+ }catch(e){console.error('[GEOTRACIA] Error guardando equipo',e);if(status)status.textContent='No se pudo guardar el equipo: '+(e?.message||'error desconocido');else toast('No se pudo guardar el equipo: '+(e?.message||''))}
+ finally{if(button){button.disabled=false;button.textContent='Guardar equipo'}}
+}
+function teamMemberForm(teamId,item=null){
+ const team=teamRows.find(t=>t.id===teamId)||teamRows.find(t=>t.id===item?.team_id);if(!team)return toast('No se encontró el equipo.');
+ const existing=item?teamDirectoryRows.find(m=>m.user_id===item.user_id):null;
+ const eligible=teamDirectoryRows.filter(person=>teamAccessRows.some(a=>a.user_id===person.user_id));
+ const selected=item?.user_id||'';
+ const userOptions=eligible.map(m=>`<option value="${esc(m.user_id)}" ${m.user_id===selected?'selected':''}>${esc(m.display_name||m.full_name||m.email||'Miembro')} · ${esc(m.email||'')}</option>`).join('');
+ dialog(item?'Editar integrante':'Agregar integrante',`<form id="teamMemberForm" class="form-grid">
+ <div class="full note">Equipo: <b>${esc(team.name)}</b>. Solo puedes incorporar miembros activos de la organización que además tengan acceso activo a este proyecto.</div>
+ <div class="full"><label class="field-label" for="teamMemberUser">Miembro *</label><select class="field" id="teamMemberUser" required ${item?'disabled':''}><option value="">Seleccionar miembro…</option>${userOptions}</select></div>
+ <div><label class="field-label" for="teamMemberRole">Rol dentro del equipo</label><select class="field" id="teamMemberRole">${[['leader','Responsable'],['member','Miembro'],['supervisor','Supervisor'],['operator','Operador']].map(([v,l])=>`<option value="${v}" ${(item?.team_role||'member')===v?'selected':''}>${l}</option>`).join('')}</select></div>
+ <div><label class="field-label" for="teamMemberActive">Estado</label><select class="field" id="teamMemberActive"><option value="true" ${item?.active===false?'':'selected'}>Activo</option><option value="false" ${item?.active===false?'selected':''}>Inactivo</option></select></div>
+ <div class="full sub" id="teamMemberFormStatus" role="status" aria-live="polite"></div></form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="team-member-save" data-id="${esc(item?.id||'')}" data-team-id="${esc(team.id)}">Guardar integrante</button>`);
+}
+async function saveTeamMember(id='',teamId=''){
+ const form=$('#teamMemberForm'),button=$('#dialogFoot [data-action="team-member-save"]'),status=$('#teamMemberFormStatus');if(!form?.reportValidity())return;
+ const team=teamRows.find(t=>t.id===teamId);if(!team||!geoOrg?.id)return toast('No se encontró el equipo o la organización.');
+ const userId=id?teamMemberRows.find(m=>m.id===id)?.user_id:$('#teamMemberUser').value;if(!userId)return toast('Selecciona un integrante válido.');
+ const role=$('#teamMemberRole').value,active=$('#teamMemberActive').value==='true';
+ try{if(button){button.disabled=true;button.textContent='Guardando…'}if(status)status.textContent='Validando miembro y guardando…';
+  let result;
+  if(id){result=await window.geoSupabase.from('geotracia_project_team_members').update({team_role:role,active,updated_at:new Date().toISOString()}).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).select('id').maybeSingle();}
+  else{
+   const old=teamMemberRows.find(m=>m.team_id===teamId&&m.user_id===userId);
+   if(old){result=await window.geoSupabase.from('geotracia_project_team_members').update({team_role:role,active:true,updated_at:new Date().toISOString()}).eq('id',old.id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).select('id').maybeSingle();}
+   else result=await window.geoSupabase.from('geotracia_project_team_members').insert({organization_id:geoOrg.id,project_id:teamProjectId,team_id:teamId,user_id:userId,team_role:role,active,assigned_by:geoCurrentUser?.id||null}).select('id').single();
+  }
+  if(result.error)throw result.error;if(!result.data)throw new Error('No se modificó ningún integrante. Comprueba los permisos del equipo.');
+  $('#dialog').close();toast(id?'Integrante actualizado.':'Integrante agregado al equipo.');await loadTeamsData(teamProjectId);
+ }catch(e){console.error('[GEOTRACIA] Error guardando integrante',e);if(status)status.textContent='No se pudo guardar el integrante: '+(e?.message||'error desconocido');else toast('No se pudo guardar el integrante: '+(e?.message||''))}
+ finally{if(button){button.disabled=false;button.textContent='Guardar integrante'}}
+}
+async function toggleTeam(id){const t=teamRows.find(x=>x.id===id);if(!t)return;const active=t.active===false;try{const {data,error}=await window.geoSupabase.from('geotracia_project_teams').update({active,updated_at:new Date().toISOString()}).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).select('id').maybeSingle();if(error)throw error;if(!data)throw new Error('No se actualizó el estado del equipo.');toast(active?'Equipo activado.':'Equipo desactivado.');await loadTeamsData(teamProjectId)}catch(e){toast('No se pudo cambiar el estado: '+(e?.message||''));console.error('[GEOTRACIA] Error cambiando estado del equipo',e)}}
+
 let opsProjectId='', opsRows=[], opsAssignments=[], opsMembers=[], opsLoading=false, opsError='', opsRoads=[], opsRoadGeometries={}, opsMapInstance=null, opsMapLayers=[];
 const opsStatusLabel={planned:'Programada',in_progress:'En ejecución',paused:'Pausada',pending_review:'Pendiente de revisión',completed:'Completada',cancelled:'Cancelada'};
 const opsTypeLabel={operation:'Operación',service:'Servicio'};
@@ -1297,21 +1414,32 @@ async function saveOperation(id=''){
  }catch(e){console.error('[GEOTRACIA] Error al guardar operación',e);report('No se pudo guardar la operación: '+(e?.message||'error desconocido de Supabase'));}
  finally{if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Guardar en Supabase'}}
 }
-function assignOperation(){
+async function assignOperation(){
  if(!geoOrg?.id)return toast('Selecciona una organización antes de asignar responsables.');
  if(!opsProjectId)return toast('Selecciona un proyecto antes de asignar responsables.');
  if(!opsRows.length)return toast('Primero registra una operación para poder asignarle un responsable.');
  const operationOptions=opsRows.map(o=>`<option value="${esc(o.id)}">${esc([o.code,o.title].filter(Boolean).join(' · '))}</option>`).join('');
  const membersWithEmail=opsMembers.filter(m=>m.user_id&&m.active!==false&&String(m.email||'').trim());
- const memberOptions=membersWithEmail.map(m=>`<option value="${esc(String(m.email).trim().toLowerCase())}" data-user-id="${esc(m.user_id)}" data-name="${esc(m.display_name||m.member_name||'')}">${esc(String(m.email).trim().toLowerCase())}${m.display_name||m.member_name?` · ${esc(m.display_name||m.member_name)}`:''}</option>`).join('');
+ let projectTeams=[],teamLinks=[];
+ try{
+  const [t,m]=await Promise.all([
+   window.geoSupabase.from('geotracia_project_teams').select('id,name,code').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).eq('active',true).order('name'),
+   window.geoSupabase.from('geotracia_project_team_members').select('team_id,user_id').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).eq('active',true)
+  ]);
+  if(t.error)throw t.error;if(m.error)throw m.error;projectTeams=t.data||[];teamLinks=m.data||[];
+ }catch(e){console.warn('[GEOTRACIA] No se pudo cargar la relación de equipos para asignaciones',e);}
+ const teamOptions=projectTeams.map(t=>`<option value="${esc(t.id)}">${esc(t.code?t.code+' · ':'')}${esc(t.name)}</option>`).join('');
+ const buildOptions=(teamId='')=>membersWithEmail.filter(m=>!teamId||teamLinks.some(link=>link.team_id===teamId&&link.user_id===m.user_id)).map(m=>`<option value="${esc(String(m.email).trim().toLowerCase())}" data-user-id="${esc(m.user_id)}" data-name="${esc(m.display_name||m.member_name||'')}">${esc(String(m.email).trim().toLowerCase())}${m.display_name||m.member_name?` · ${esc(m.display_name||m.member_name)}`:''}</option>`).join('');
  dialog('Asignar responsable a una operación',`<form id="opsAssignForm" class="form-grid">
  <div class="full"><label class="field-label" for="opsAssignOperation">Operación</label><select class="field" id="opsAssignOperation" required><option value="">Seleccionar operación…</option>${operationOptions}</select></div>
- <div class="full"><label class="field-label" for="opsAssignEmail">Correo electrónico del responsable</label><input class="field" id="opsAssignEmail" type="email" list="opsAssignEmails" autocomplete="email" placeholder="nombre@empresa.cl" required>${memberOptions?`<datalist id="opsAssignEmails">${memberOptions}</datalist>`:''}<small class="sub">Ingresa el correo registrado en los miembros con acceso al proyecto. El identificador de Supabase se resolverá automáticamente.</small></div>
+ ${projectTeams.length?`<div class="full"><label class="field-label" for="opsAssignTeam">Equipo de trabajo (opcional)</label><select class="field" id="opsAssignTeam"><option value="">Todos los miembros con acceso al proyecto</option>${teamOptions}</select><small class="sub">Al elegir un equipo, la lista de responsables se limita a sus integrantes activos.</small></div>`:''}
+ <div class="full"><label class="field-label" for="opsAssignEmail">Correo electrónico del responsable</label><input class="field" id="opsAssignEmail" type="email" list="opsAssignEmails" autocomplete="email" placeholder="nombre@empresa.cl" required><datalist id="opsAssignEmails">${buildOptions()}</datalist><small class="sub">Selecciona un integrante del proyecto. El identificador de Supabase se resolverá automáticamente.</small></div>
  ${field('Nombre visible del responsable','opsAssignName','Nombre y apellido')}
  <div><label class="field-label" for="opsAssignRole">Función en la operación</label><select class="field" id="opsAssignRole"><option>Responsable</option><option>Supervisor</option><option>Inspector</option><option>Ejecutor</option><option>Apoyo técnico</option></select></div>
- <div class="full note">La asignación se guardará en Supabase y quedará vinculada a la operación y al proyecto actual.</div><div class="full sub" id="opsAssignStatus" role="status" aria-live="polite" style="overflow-wrap:anywhere;white-space:normal"></div>
+ <div class="full note">La asignación se guardará en Supabase y quedará vinculada a la operación y al proyecto actual. El equipo funciona como filtro de integrantes; la asignación persistida se vincula al usuario.</div><div class="full sub" id="opsAssignStatus" role="status" aria-live="polite" style="overflow-wrap:anywhere;white-space:normal"></div>
  </form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="ops-assign-save">Guardar asignación</button>`);
- const email=$('#opsAssignEmail'),name=$('#opsAssignName');
+ const email=$('#opsAssignEmail'),name=$('#opsAssignName'),team=$('#opsAssignTeam'),list=$('#opsAssignEmails');
+ team?.addEventListener('change',()=>{if(list)list.innerHTML=buildOptions(team.value);if(email){email.value='';email.focus()}if(name)name.value=''});
  email?.addEventListener('change',()=>{const member=membersWithEmail.find(m=>String(m.email||'').trim().toLowerCase()===email.value.trim().toLowerCase());if(member&&!name.value.trim())name.value=member.display_name||member.member_name||''});
 }
 async function saveOperationAssignment(){
@@ -1387,7 +1515,7 @@ function openSsWelcomeModal(){
  const modal=document.createElement("div");modal.id="ssWelcomeModal";modal.className="ss-welcome-modal";modal.innerHTML=`<div class="ss-welcome-modal-backdrop" data-action="close-ss-welcome"></div><section class="ss-welcome-modal-card" role="dialog" aria-modal="true" aria-labelledby="ssWelcomeModalTitle"><header><span>GEOTRACIA</span><button type="button" aria-label="Cerrar" data-action="close-ss-welcome">×</button><h2 id="ssWelcomeModalTitle">Crea tu organización</h2></header><form id="ssWelcomeCreateForm"><div class="ss-welcome-modal-body"><label for="ssWelcomeOrgName">Nombre de la empresa u organización *</label><input id="ssWelcomeOrgName" name="organization_name" required minlength="2" maxlength="160" placeholder="Ej. Ingeniería Santana"><p>Tu cuenta quedará como <strong>owner</strong>. Se iniciará una prueba de 14 días del plan Equipo, si así lo establece el alta configurada en Supabase.</p><div id="ssWelcomeCreateStatus" role="status" aria-live="polite"></div></div><footer><button type="button" class="ss-welcome-cancel" data-action="close-ss-welcome">Cancelar</button><button type="submit" class="ss-welcome-submit">Crear organización <span>→</span></button></footer></form></section>`;
  document.body.appendChild(modal);document.body.classList.add("ss-welcome-modal-open");setTimeout(()=>modal.querySelector("#ssWelcomeOrgName")?.focus(),60);
 }
-function show(){if(opsMapInstance){try{opsMapInstance.remove()}catch{}opsMapInstance=null;opsMapLayers=[]}if(maintenanceMapInstance){try{maintenanceMapInstance.remove()}catch{}maintenanceMapInstance=null;maintenanceMapLayers=[]}if(inventoryMapInstance){try{inventoryMapInstance.remove()}catch{}inventoryMapInstance=null;inventoryMapMarkers={}}if(incidentMapInstance){try{incidentMapInstance.remove()}catch{}incidentMapInstance=null;incidentMapMarkers={}}if(inspectionMapInstance){try{inspectionMapInstance.remove()}catch{}inspectionMapInstance=null;inspectionMapMarkers={}}let html=active==="dashboard"?dash():active==="proyectos"?projectModule():active==="mapa"?mapModule():active==="caminos"?roads():active==="kilometraje"?kilometrajeModule():active==="inspecciones"?inspectionsModule():active==="inventario"?inventoryModule():active==="incidencias"?incidentsModule():active==="mantenimiento"?maintenanceModule():active==="formularios"?formsModule():active==="operaciones"?operationsModule():active==="offline"?offline():active==="informes"?reports():active==="usuarios"?usersModule():active==="configuracion"?config():active==="administracion"?admin():["inspecciones","inventario","incidencias","mantenimiento","operaciones"].includes(active)?recordsModule():generic();if(html&&typeof html.then==="function"){$("#content").innerHTML=`${head("Trabajo sin conexión","Preparando estado del dispositivo…")}`;html.then(markup=>{if(active==="offline"){$("#content").innerHTML=markup;renderNav();renderBottom();renderOfflineGeometryMap().catch(()=>{});updateSidebarNetworkStatus()}}).catch(e=>{console.error(e);$("#content").innerHTML=`${head("Trabajo sin conexión","No se pudo leer el almacenamiento local.")}`})}else $("#content").innerHTML=html;renderNav();renderBottom();if(active==="inventario")setTimeout(renderInventoryMap,40);if(active==="mantenimiento")setTimeout(renderMaintenanceMap,80);if(active==="incidencias")setTimeout(renderIncidentMap,40);if(active==="inspecciones")setTimeout(renderInspectionMap,40);if(active==="operaciones")setTimeout(renderOperationsMap,80);if(active==="configuracion")setTimeout(loadUserSpaceData,0);if(active==="administracion")setTimeout(loadSubscriptionAdmin,0);if(active==="informes")setTimeout(async()=>{if(!geoProjects.length)await loadGeoProjects();if(active!=="informes")return;updateReportProjectOptions();if(reportProjectId&&geoProjects.some(p=>p.id===reportProjectId))loadReportData(reportProjectId)},0);window.scrollTo({top:0,behavior:"smooth"});}
+function show(){if(opsMapInstance){try{opsMapInstance.remove()}catch{}opsMapInstance=null;opsMapLayers=[]}if(maintenanceMapInstance){try{maintenanceMapInstance.remove()}catch{}maintenanceMapInstance=null;maintenanceMapLayers=[]}if(inventoryMapInstance){try{inventoryMapInstance.remove()}catch{}inventoryMapInstance=null;inventoryMapMarkers={}}if(incidentMapInstance){try{incidentMapInstance.remove()}catch{}incidentMapInstance=null;incidentMapMarkers={}}if(inspectionMapInstance){try{inspectionMapInstance.remove()}catch{}inspectionMapInstance=null;inspectionMapMarkers={}}let html=active==="dashboard"?dash():active==="proyectos"?projectModule():active==="mapa"?mapModule():active==="caminos"?roads():active==="kilometraje"?kilometrajeModule():active==="inspecciones"?inspectionsModule():active==="inventario"?inventoryModule():active==="incidencias"?incidentsModule():active==="mantenimiento"?maintenanceModule():active==="formularios"?formsModule():active==="operaciones"?operationsModule():active==="equipos"?teamsModule():active==="offline"?offline():active==="informes"?reports():active==="usuarios"?usersModule():active==="configuracion"?config():active==="administracion"?admin():["inspecciones","inventario","incidencias","mantenimiento","operaciones"].includes(active)?recordsModule():generic();if(html&&typeof html.then==="function"){$("#content").innerHTML=`${head("Trabajo sin conexión","Preparando estado del dispositivo…")}`;html.then(markup=>{if(active==="offline"){$("#content").innerHTML=markup;renderNav();renderBottom();renderOfflineGeometryMap().catch(()=>{});updateSidebarNetworkStatus()}}).catch(e=>{console.error(e);$("#content").innerHTML=`${head("Trabajo sin conexión","No se pudo leer el almacenamiento local.")}`})}else $("#content").innerHTML=html;renderNav();renderBottom();if(active==="inventario")setTimeout(renderInventoryMap,40);if(active==="mantenimiento")setTimeout(renderMaintenanceMap,80);if(active==="incidencias")setTimeout(renderIncidentMap,40);if(active==="inspecciones")setTimeout(renderInspectionMap,40);if(active==="operaciones")setTimeout(renderOperationsMap,80);if(active==="configuracion")setTimeout(loadUserSpaceData,0);if(active==="administracion")setTimeout(loadSubscriptionAdmin,0);if(active==="informes")setTimeout(async()=>{if(!geoProjects.length)await loadGeoProjects();if(active!=="informes")return;updateReportProjectOptions();if(reportProjectId&&geoProjects.some(p=>p.id===reportProjectId))loadReportData(reportProjectId)},0);window.scrollTo({top:0,behavior:"smooth"});}
 function sidebarIcon(id){
  const paths={
  dashboard:'<path d="m4 10 8-7 8 7v10a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z"/>',
@@ -1401,6 +1529,7 @@ function sidebarIcon(id){
  mantenimiento:'<path d="m14.5 6.5 3-3a5 5 0 0 1-6.4 6.4L5 16l3 3 6.1-6.1a5 5 0 0 0 6.4-6.4l-3 3z"/><path d="m4 4 5 5M3 7l4-4"/>',
  formularios:'<path d="M6 3h9l4 4v14H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8 12h8M8 16h8"/>',
  operaciones:'<path d="m12 2 8 10-8 10L4 12 12 2Z"/>',
+ equipos:'<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M14 16a5 5 0 0 1 7 4"/>',
  offline:'<path d="M7 18a4 4 0 1 1 .8-7.9A5.5 5.5 0 0 1 18 9a4.5 4.5 0 1 1 0 9Z"/>',
  informes:'<path d="M4 20V11M10 20V5M16 20V8M22 20V3"/>',
  configuracion:'<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.6a8 8 0 0 1-1.8 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.8-1l-1.7.6-1.4-2.4L7.1 15a8 8 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.6a8 8 0 0 1 1.8-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.8 1l1.7-.6 1.4 2.4-1.4 1.1a8 8 0 0 1-.1 2Z" transform="translate(-1 -1) scale(1.08)"/>',
@@ -1417,7 +1546,7 @@ function renderBottom(){
  const n=document.createElement("nav");n.className="bottom-nav";n.setAttribute("aria-label","Navegación principal móvil");
  n.innerHTML=list.map(m=>`<button class="${m[0]===active?"active":""}" data-go="${m[0]}" aria-label="${labels[m[0]]||m[1]}" ${m[0]===active?'aria-current="page"':''}><span class="bottom-icon">${sidebarIcon(m[0])}</span><span class="bottom-label">${labels[m[0]]||m[1]}</span></button>`).join("");document.body.append(n);
 }
-function go(id){active=id;query="";typeFilter="";$("#globalSearch").value="";$("#sidebar").classList.remove("open");$("#overlay").classList.remove("show");show();if(id==="dashboard"){if(!geoOrg||!geoProjects.length)loadGeoProjects().then(()=>loadDashboardData());else loadDashboardData()}if(id==="proyectos")loadGeoProjects();if(id==="usuarios")loadGeoUsers();if(id==="kilometraje"){if(!geoProjects.length)loadGeoProjects().then(()=>loadKilometrajeData(kmProjectId));else loadKilometrajeData(kmProjectId)}if(id==="inspecciones"){if(!geoProjects.length)loadGeoProjects().then(()=>loadInspectionData(inspectionProjectId));else loadInspectionData(inspectionProjectId)}if(id==="inventario"){if(!geoProjects.length)loadGeoProjects().then(()=>loadInventoryData(inventoryProjectId));else loadInventoryData(inventoryProjectId)}if(id==="incidencias"){if(!geoProjects.length)loadGeoProjects().then(()=>loadIncidentData(incidentProjectId));else loadIncidentData(incidentProjectId)}if(id==="mantenimiento"){if(!geoProjects.length)loadGeoProjects().then(()=>loadMaintenanceData(maintenanceProjectId));else loadMaintenanceData(maintenanceProjectId)}if(id==="formularios"){if(!geoProjects.length)loadGeoProjects().then(()=>loadFormsData(formsProjectId));else loadFormsData(formsProjectId)}if(id==="operaciones"){if(!geoProjects.length)loadGeoProjects().then(()=>loadOperationsData(opsProjectId));else loadOperationsData(opsProjectId)}}
+function go(id){active=id;query="";typeFilter="";$("#globalSearch").value="";$("#sidebar").classList.remove("open");$("#overlay").classList.remove("show");show();if(id==="dashboard"){if(!geoOrg||!geoProjects.length)loadGeoProjects().then(()=>loadDashboardData());else loadDashboardData()}if(id==="proyectos")loadGeoProjects();if(id==="usuarios")loadGeoUsers();if(id==="kilometraje"){if(!geoProjects.length)loadGeoProjects().then(()=>loadKilometrajeData(kmProjectId));else loadKilometrajeData(kmProjectId)}if(id==="inspecciones"){if(!geoProjects.length)loadGeoProjects().then(()=>loadInspectionData(inspectionProjectId));else loadInspectionData(inspectionProjectId)}if(id==="inventario"){if(!geoProjects.length)loadGeoProjects().then(()=>loadInventoryData(inventoryProjectId));else loadInventoryData(inventoryProjectId)}if(id==="incidencias"){if(!geoProjects.length)loadGeoProjects().then(()=>loadIncidentData(incidentProjectId));else loadIncidentData(incidentProjectId)}if(id==="mantenimiento"){if(!geoProjects.length)loadGeoProjects().then(()=>loadMaintenanceData(maintenanceProjectId));else loadMaintenanceData(maintenanceProjectId)}if(id==="formularios"){if(!geoProjects.length)loadGeoProjects().then(()=>loadFormsData(formsProjectId));else loadFormsData(formsProjectId)}if(id==="operaciones"){if(!geoProjects.length)loadGeoProjects().then(()=>loadOperationsData(opsProjectId));else loadOperationsData(opsProjectId)}if(id==="equipos"){if(!geoProjects.length)loadGeoProjects().then(()=>loadTeamsData(teamProjectId));else loadTeamsData(teamProjectId)}}
 function toast(msg){let t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(window.__toastTimer);window.__toastTimer=setTimeout(()=>t.classList.remove("show"),3300)}
 function dialog(title,body,foot=`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="confirm">Confirmar</button>`){$("#dialogTitle").textContent=title;$("#dialogBody").innerHTML=body;$("#dialogFoot").innerHTML=foot;$("#dialog").showModal()}
 function field(label,id,placeholder="",value=""){return `<div><label class="field-label" for="${id}">${label}</label><input class="field" id="${id}" placeholder="${placeholder}" value="${esc(value)}"></div>`}
@@ -1452,7 +1581,7 @@ case"forms-reload":loadFormsData(formsProjectId);break;case"forms-template-new":
 case"new-record":newRecord();break;case"new-incident":newRecord("Incidencia");break;case"save-record":saveRecord();break;case"inspection-reload":loadInspectionData(inspectionProjectId);break;case"inspection-new":newInspection();break;case"inspection-save":saveInspection();break;case"inspection-view":viewInspection(e?.dataset?.id||"");break;case"inspection-locate":selectInspectionOnMap(e?.dataset?.id||"",false);break;case"inspection-edit-status":editInspectionStatus(e?.dataset?.id||"");break;case"inspection-status-save":saveInspectionStatus(e?.dataset?.id||"");break;case"inventory-reload":loadInventoryData(inventoryProjectId);break;case"inventory-new":newInventoryItem();break;case"inventory-save":saveInventoryItem(e?.dataset?.id||"");break;case"inventory-view":viewInventoryItem(e?.dataset?.id||"");break;case"inventory-edit":editInventoryItem(e?.dataset?.id||"");break;case"inventory-locate":selectInventoryOnMap(e?.dataset?.id||"",false);break;case"incident-reload":loadIncidentData(incidentProjectId);break;case"incident-new":newIncident();break;case"incident-save":saveIncident(e?.dataset?.id||"");break;case"incident-view":viewIncident(e?.dataset?.id||"");break;case"incident-edit":newIncident(incidentRows.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"incident-edit-status":editIncidentStatus(e?.dataset?.id||"");break;case"incident-status-save":saveIncidentStatus(e?.dataset?.id||"");break;case"incident-locate":selectIncidentOnMap(e?.dataset?.id||"",false);break;case"kilometraje-reload":loadKilometrajeData(kmProjectId);break;
 case"dashboard-refresh":loadDashboardData();break;case"dashboard-projects-retry":geoProjectsPromise=null;geoProjectsError='';geoOrg=null;geoProjects=[];loadGeoProjects().then(()=>{if(active==='dashboard')loadDashboardData();else show()});break;case"dashboard-export":exportDashboardSummary();break;case"project-roads-open":openProjectRoads(e?.dataset?.projectId||"");break;case"project-road-new":newProjectRoad(e?.dataset?.projectId||"");break;case"project-road-save":saveProjectRoad(e?.dataset?.projectId||"");break;case"project-segment-new":newProjectSegment(e?.dataset?.projectId||"");break;case"project-segment-save":saveProjectSegment(e?.dataset?.projectId||"");break;case"new-project":newProject();break;case"save-project":saveGeoProject(e?.dataset?.projectId||"");break;case"reload-projects":loadGeoProjects();break;case"archive-project-confirm":confirmArchiveProject(e?.dataset?.projectId||"");break;case"export-projects":exportGeoProjects();break;case"clear-project-filters":{const a=$("#projectSearch"),b=$("#projectStatusFilter"),c=$("#projectTypeFilter");if(a)a.value="";if(b)b.value="";if(c)c.value="";show();break;}case"edit-project-from-view":{const p=geoProjects.find(x=>x.id===e?.dataset?.projectId);if(p)newProject(p);break;}
 case"new-user":toast("La creación de cuentas requiere configurar una invitación segura en Supabase Auth.");break;case"save-user":toast("No se guardan usuarios localmente. Usa invitaciones seguras.");break;case"users-reload":loadGeoUsers();break;case"member-save":saveGeoMember(e?.dataset?.id||"");break;
-case"ops-reload":loadOperationsData(opsProjectId);break;case"ops-new":newOperation();break;case"ops-edit":newOperation(opsRows.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"ops-view":viewOperation(e?.dataset?.id||"");break;case"ops-save":saveOperation(e?.dataset?.id||"");break;case"ops-export":exportOperations();break;case"ops-assign":assignOperation();break;case"ops-assign-save":saveOperationAssignment();break;case"ops-access":manageProjectAccess();break;case"ops-role-edit":manageProjectAccess(opsMembers.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"ops-access-save":saveProjectAccess(e?.dataset?.id||"");break;
+case"teams-reload":loadTeamsData(teamProjectId);break;case"team-new":teamForm();break;case"team-edit":teamForm(teamRows.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"team-save":saveTeam(e?.dataset?.id||"");break;case"team-toggle":toggleTeam(e?.dataset?.id||"");break;case"team-member-new":teamMemberForm(e?.dataset?.teamId||"");break;case"team-member-edit":{const m=teamMemberRows.find(x=>x.id===(e?.dataset?.id||""));if(m)teamMemberForm(m.team_id,m);break;}case"team-member-save":saveTeamMember(e?.dataset?.id||"",e?.dataset?.teamId||"");break;case"ops-reload":loadOperationsData(opsProjectId);break;case"ops-new":newOperation();break;case"ops-edit":newOperation(opsRows.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"ops-view":viewOperation(e?.dataset?.id||"");break;case"ops-save":saveOperation(e?.dataset?.id||"");break;case"ops-export":exportOperations();break;case"ops-assign":assignOperation();break;case"ops-assign-save":saveOperationAssignment();break;case"ops-access":manageProjectAccess();break;case"ops-role-edit":manageProjectAccess(opsMembers.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"ops-access-save":saveProjectAccess(e?.dataset?.id||"");break;
 case"export-csv":exportRecords();break;case"export-users":exportFile("geotracia-usuarios.csv","Nombre,Correo,Rol,Organización,Estado\\n"+users.map(u=>[u.name,u.email,u.role,u.org,u.state].join(",")).join("\\n"),"text/csv");toast("Usuarios exportados");break;
 case"new-road":dialog("Nuevo camino",`<form id="roadForm" class="form-grid">${field("Código","roadCode","Ej. R-720")}${field("Nombre del camino","roadName","Nombre oficial")}${field("Progresiva inicial","roadStart","Km 0+000")}${field("Progresiva final","roadEnd","Km 10+000")}<div class="note full">Formulario de evaluación; persistencia de caminos pendiente.</div></form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="save-road">Validar formulario</button>`);break;
 case"save-road":if(!$("#roadForm").reportValidity())return;$("#dialog").close();toast("Formulario validado; guardado real pendiente");break;
@@ -1506,7 +1635,7 @@ if(e.target.id==="maintenanceSearch"){query=e.target.value;const pos=e.target.se
 if(e.target.id==="roadSearch")$$('#roadRows tr').forEach(tr=>tr.hidden=!tr.textContent.toLowerCase().includes(e.target.value.toLowerCase()));
 if(e.target.id==="globalSearch"&&e.target.value.trim().length>1){let q=e.target.value.toLowerCase(),m=modules.find(x=>x[1].toLowerCase().includes(q));if(m){/* search remains unobtrusive until Enter */}}
 });
-document.addEventListener("change",e=>{if(e.target.id==="uspAvatarFile"){userSpaceChooseAvatar(e.target.files?.[0]);return}if(e.target.id==="invPhotoCamera"||e.target.id==="invPhotoGallery"){handleInventoryPhoto(e.target);return}if(e.target.id==="icPhotoCamera"||e.target.id==="icPhotoGallery"){handleIncidentPhoto(e.target);return}if(["projectStatusFilter","projectTypeFilter"].includes(e.target.id)){show();return}if(e.target.id==="typeFilter"){typeFilter=e.target.value;let t=$("#recordsTable");if(t)t.innerHTML=table(records.filter(r=>match(r,query)&&(!typeFilter||r.type===typeFilter)))}if(e.target.id==="userState"){let t=$("#userTable");if(t)t.innerHTML=userTable()}if(e.target.id==="reportProjectSelect"){reportProjectId=e.target.value;loadReportData(reportProjectId)}if(e.target.id==="kmProjectSelect"){loadKilometrajeData(e.target.value)}if(e.target.id==="inspectionProjectSelect"){loadInspectionData(e.target.value)}if(e.target.id==="inventoryProjectSelect"){loadInventoryData(e.target.value)}if(e.target.id==="incidentProjectSelect"){loadIncidentData(e.target.value)}if(e.target.id==="maintenanceProjectSelect"){loadMaintenanceData(e.target.value)}if(e.target.id==="formsProjectSelect"){loadFormsData(e.target.value)}if(e.target.id==="opsProjectSelect"){loadOperationsData(e.target.value)}if(e.target.id==="maintenanceStatusFilter"){typeFilter=e.target.value;show()}if(e.target.id==="dashboardProjectSelect"){dashboardProjectId=e.target.value;persistDashboardProjectId(dashboardProjectId);loadDashboardData(dashboardProjectId)}if(e.target.id==="dashboardPeriodSelect"){dashboardPeriodDays=Number(e.target.value)||30;loadDashboardData()}});
+document.addEventListener("change",e=>{if(e.target.id==="uspAvatarFile"){userSpaceChooseAvatar(e.target.files?.[0]);return}if(e.target.id==="invPhotoCamera"||e.target.id==="invPhotoGallery"){handleInventoryPhoto(e.target);return}if(e.target.id==="icPhotoCamera"||e.target.id==="icPhotoGallery"){handleIncidentPhoto(e.target);return}if(["projectStatusFilter","projectTypeFilter"].includes(e.target.id)){show();return}if(e.target.id==="typeFilter"){typeFilter=e.target.value;let t=$("#recordsTable");if(t)t.innerHTML=table(records.filter(r=>match(r,query)&&(!typeFilter||r.type===typeFilter)))}if(e.target.id==="userState"){let t=$("#userTable");if(t)t.innerHTML=userTable()}if(e.target.id==="reportProjectSelect"){reportProjectId=e.target.value;loadReportData(reportProjectId)}if(e.target.id==="kmProjectSelect"){loadKilometrajeData(e.target.value)}if(e.target.id==="inspectionProjectSelect"){loadInspectionData(e.target.value)}if(e.target.id==="inventoryProjectSelect"){loadInventoryData(e.target.value)}if(e.target.id==="incidentProjectSelect"){loadIncidentData(e.target.value)}if(e.target.id==="maintenanceProjectSelect"){loadMaintenanceData(e.target.value)}if(e.target.id==="formsProjectSelect"){loadFormsData(e.target.value)}if(e.target.id==="opsProjectSelect"){loadOperationsData(e.target.value)}if(e.target.id==="teamsProjectSelect"){loadTeamsData(e.target.value)}if(e.target.id==="maintenanceStatusFilter"){typeFilter=e.target.value;show()}if(e.target.id==="dashboardProjectSelect"){dashboardProjectId=e.target.value;persistDashboardProjectId(dashboardProjectId);loadDashboardData(dashboardProjectId)}if(e.target.id==="dashboardPeriodSelect"){dashboardPeriodDays=Number(e.target.value)||30;loadDashboardData()}});
 $("#globalSearch").addEventListener("keydown",e=>{if(e.key==="Enter"){let q=e.target.value.trim().toLowerCase(),m=modules.find(x=>x[1].toLowerCase().includes(q)||x[3].toLowerCase().includes(q));if(m)go(m[0]);else{query=q;go("inspecciones");toast("Búsqueda aplicada a registros")}}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();e.target.focus()}});
 $("#menu").addEventListener("click",()=>{$("#sidebar").classList.toggle("open");$("#overlay").classList.toggle("show")});$("#overlay").addEventListener("click",()=>{$("#sidebar").classList.remove("open");$("#overlay").classList.remove("show")});
 
@@ -1667,7 +1796,7 @@ async function initializeGeoAppSession(){
   geoCurrentUser=data.session.user;
   await loadGeoNotifications();
   subscribeGeoNotifications(geoCurrentUser.id);
-  if(["dashboard","proyectos","kilometraje","inspecciones","inventario","incidencias","mantenimiento","formularios","operaciones"].includes(active)){
+  if(["dashboard","proyectos","kilometraje","inspecciones","inventario","incidencias","mantenimiento","formularios","operaciones","equipos"].includes(active)){
    await loadGeoProjects();
    if(active==="dashboard")await loadDashboardData();
    if(active==="kilometraje")loadKilometrajeData(kmProjectId);
@@ -1677,6 +1806,7 @@ async function initializeGeoAppSession(){
    if(active==="mantenimiento")loadMaintenanceData(maintenanceProjectId);
    if(active==="formularios")loadFormsData(formsProjectId);
    if(active==="operaciones")loadOperationsData(opsProjectId);
+   if(active==="equipos")loadTeamsData(teamProjectId);
   }
  }catch(e){
   geoLoadDiagnostics={...geoLoadDiagnostics,stage:'error al restaurar sesión al iniciar app.js',errorCode:e?.code||'',errorDetails:e?.message||String(e),updatedAt:new Date().toISOString()};
@@ -1685,7 +1815,7 @@ async function initializeGeoAppSession(){
  }
 }
 window.addEventListener("geotracia:session",async()=>{
- if(!["dashboard","proyectos","kilometraje","inspecciones","inventario","incidencias","mantenimiento","formularios","operaciones"].includes(active))return;
+ if(!["dashboard","proyectos","kilometraje","inspecciones","inventario","incidencias","mantenimiento","formularios","operaciones","equipos"].includes(active))return;
  await loadGeoProjects();
  if(active==="dashboard")await loadDashboardData();
  if(active==="kilometraje")loadKilometrajeData(kmProjectId);
@@ -1695,6 +1825,7 @@ window.addEventListener("geotracia:session",async()=>{
  if(active==="mantenimiento")loadMaintenanceData(maintenanceProjectId);
  if(active==="formularios")loadFormsData(formsProjectId);
  if(active==="operaciones")loadOperationsData(opsProjectId);
+   if(active==="equipos")loadTeamsData(teamProjectId);
 });
 // Inicialización explícita para cubrir el caso en que el evento de auth ocurrió antes de este archivo.
 initializeGeoAppSession();
@@ -1730,6 +1861,6 @@ window.addEventListener('online',()=>{updateSidebarNetworkStatus();window.dispat
 window.addEventListener('offline',()=>{updateSidebarNetworkStatus();window.dispatchEvent(new CustomEvent('geotracia:network-change',{detail:{online:false}}))});
 // Llamada inmediata: no depender exclusivamente del evento load.
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',updateSidebarNetworkStatus,{once:true});else updateSidebarNetworkStatus();
-window.addEventListener('load',()=>{updateSidebarNetworkStatus();if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./service-worker.js?v=offline-shell-v4-auth').then(()=>updateSidebarNetworkStatus()).catch(e=>console.warn('[GEOTRACIA] Service Worker no registrado',e))},{once:true});
+window.addEventListener('load',()=>{updateSidebarNetworkStatus();if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./service-worker.js?v=teams-module-v1').then(()=>updateSidebarNetworkStatus()).catch(e=>console.warn('[GEOTRACIA] Service Worker no registrado',e))},{once:true});
 
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&document.querySelector("#ssWelcomeModal"))closeSsWelcomeModal()});
