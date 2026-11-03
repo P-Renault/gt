@@ -48,3 +48,24 @@ body:not(.geo-authenticated) .sidebar,body:not(.geo-authenticated) .main,body:no
 .legal-reaccept>p{font-size:13px;line-height:1.65;color:#718294}
 .legal-doc-links{padding-left:20px;margin:10px 0 18px;font-size:13px}
 .legal-reaccept .auth-submit{margin-top:18px}
+
+
+/* GEOTRACIA AUTH — presentación profesional del logotipo en escritorio.
+   Cambio deliberadamente limitado a la tarjeta de marca; no altera el formulario ni móvil. */
+@media (min-width:761px){
+  .auth-story-brand{
+    width:min(100%,460px);
+    box-sizing:border-box;
+    padding:15px 19px;
+    border:1px solid rgba(255,255,255,.72);
+    border-radius:17px;
+    background:#fff;
+    box-shadow:0 14px 34px rgba(0,12,28,.20),0 2px 7px rgba(0,12,28,.10);
+  }
+  .auth-story-brand img{
+    width:100%;
+    max-height:108px;
+    object-fit:contain;
+    object-position:left center;
+  }
+}
