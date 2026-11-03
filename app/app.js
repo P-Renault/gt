@@ -1194,7 +1194,7 @@ function teamsModule(){
   const visible=members;
   const initials=(name='')=>String(name).trim().split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase()||'U';
   const typeClass=({'field':'field','topography':'topography','laboratory':'laboratory'})[team.team_type]||'';
-  const typeLabel=({'field':'Terreno','topography':'Topografía','laboratory':'Laboratorio','inspection':'Inspección','maintenance':'Mantenimiento','administration':'Administración','other':'Otro'})[team.team_type]||team.team_type||'Otro';
+  const typeLabel=({'field':'Terreno','topography':'Topografía','laboratory':'Laboratorio','quality':'Inspección','administration':'Administración','other':'Otro'})[team.team_type]||team.team_type||'Otro';
   return `<article class="team-card ${team.active===false?'team-card-inactive':''}">
    <div class="team-card-head"><div class="team-type-icon team-type-${typeClass}">♧</div><div class="team-card-title"><div><div class="eyebrow">${esc(typeLabel)}</div><h3>${esc(team.name)}</h3></div><span class="team-code">${esc(team.code)}</span></div>${team.active===false?'<span class="team-inactive-badge">Inactivo</span>':badge('Activo','success')}</div>
    ${team.description?`<p class="team-description">${esc(team.description)}</p>`:''}
@@ -1244,7 +1244,7 @@ function teamForm(item=null){
  dialog(item?'Editar equipo':'Crear equipo',`<form id="teamForm" class="form-grid">
  <div><label class="field-label" for="teamCode">Código *</label><input class="field" id="teamCode" required maxlength="40" value="${esc(value('code'))}" placeholder="Código del equipo"></div>
  <div><label class="field-label" for="teamName">Nombre del equipo *</label><input class="field" id="teamName" required maxlength="120" value="${esc(value('name'))}" placeholder="Nombre del equipo"></div>
- <div><label class="field-label" for="teamType">Tipo de equipo</label><select class="field" id="teamType">${[['field','Terreno'],['topography','Topografía'],['laboratory','Laboratorio'],['inspection','Inspección'],['maintenance','Mantenimiento'],['administration','Administración'],['other','Otro']].map(([v,l])=>`<option value="${v}" ${value('team_type','other')===v?'selected':''}>${l}</option>`).join('')}</select></div>
+ <div><label class="field-label" for="teamType">Tipo de equipo</label><select class="field" id="teamType">${[['field','Terreno'],['topography','Topografía'],['laboratory','Laboratorio'],['quality','Inspección'],['administration','Administración'],['other','Otro']].map(([v,l])=>`<option value="${v}" ${value('team_type','other')===v?'selected':''}>${l}</option>`).join('')}</select></div>
  <div><label class="field-label" for="teamActive">Estado</label><select class="field" id="teamActive"><option value="true" ${value('active',true)!==false?'selected':''}>Activo</option><option value="false" ${value('active',true)===false?'selected':''}>Inactivo</option></select></div>
  <div class="full"><label class="field-label" for="teamDescription">Descripción</label><textarea class="field" id="teamDescription" rows="3" maxlength="1000" placeholder="Describe las funciones y responsabilidades del equipo">${esc(value('description'))}</textarea></div>
  <div class="note full">El equipo quedará vinculado al proyecto seleccionado. Su organización y proyecto no podrán cambiarse después de crearlo.</div><div class="full sub" id="teamFormStatus" role="status" aria-live="polite"></div></form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="team-save" data-id="${esc(x.id||'')}">Guardar equipo</button>`);
