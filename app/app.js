@@ -1182,6 +1182,8 @@ async function saveIncidentStatus(id){const x=incidentRows.find(r=>r.id===id);if
 // Administración de equipos por proyecto. Los identificadores y relaciones se fijan al crear;
 // las actualizaciones usan exclusivamente las columnas autorizadas por los GRANT de Supabase.
 function teamsModule(){
+ // Sin datos semilla ni registros de demostración: teamRows y sus relaciones
+ // se alimentan exclusivamente desde loadTeamsData() mediante Supabase.
  const projects=geoProjects.filter(p=>p.status!=='archived');
  const selected=projects.find(p=>p.id===teamProjectId);
  const activeTeams=teamRows.filter(t=>t.active!==false);
@@ -1203,7 +1205,7 @@ function teamsModule(){
  }).join('');
  return `${head('Equipos de trabajo','Organiza responsables e integrantes por proyecto. Los cambios se guardan en Supabase y se validan mediante RLS.',btn('↻ Actualizar','teams-reload')+btn('＋ Crear equipo','team-new','primary',teamProjectId?'':'disabled'))}
  <section class="team-project-bar"><label class="field-label" for="teamsProjectSelect">Proyecto seleccionado<select class="field" id="teamsProjectSelect" ${projects.length?'':'disabled'}><option value="">Seleccionar proyecto…</option>${projectOptions}</select></label><div class="team-project-meta"><span class="team-meta-label">Organización</span><b>${esc(geoOrg?.name||'No disponible')}</b><small>${selected?esc(selected.name):'Selecciona un proyecto para administrar sus equipos.'}</small></div></section>
- ${teamError?`<div class="note danger-note" role="alert">${esc(teamError)}</div>`:''}
+ ${teamError?`<div class="note danger-note" role="alert">${esc(teamError)}</div>`:(!teamLoading&&teamProjectId?'<div class="team-notice" role="status"><b>Fuente de datos: Supabase</b><span>Los equipos e integrantes mostrados corresponden a los registros consultados para el proyecto seleccionado.</span></div>':'')}
  ${!geoOrg?'<div class="team-notice"><b>Sesión requerida</b><span>No se encontró una organización activa. Inicia sesión y vuelve a abrir el módulo.</span></div>':''}
  ${!projects.length&&geoOrg?'<div class="team-notice"><b>Sin proyectos</b><span>Crea primero un proyecto en el módulo Proyectos para registrar equipos.</span></div>':''}
  <div class="kpis">${kpi(teamLoading?'…':teamRows.length,'Equipos registrados','Proyecto seleccionado','♧')}${kpi(teamLoading?'…':activeTeams.length,'Equipos activos','Disponibles para operación','✓','teal')}${kpi(teamLoading?'…':activeMembers.length,'Integrantes activos','Asignados a equipos','♙','purple')}${kpi(teamLoading?'…':teamRows.filter(t=>t.active===false).length,'Equipos inactivos','Conservados en el historial','◷','amber')}</div>
@@ -1240,11 +1242,11 @@ async function loadTeamsData(projectId=teamProjectId){
 function teamForm(item=null){
  const x=item||{};const value=(k,d='')=>x[k]??d;
  dialog(item?'Editar equipo':'Crear equipo',`<form id="teamForm" class="form-grid">
- <div><label class="field-label" for="teamCode">Código *</label><input class="field" id="teamCode" required maxlength="40" value="${esc(value('code'))}" placeholder="Ej. EQ-TER-01"></div>
- <div><label class="field-label" for="teamName">Nombre del equipo *</label><input class="field" id="teamName" required maxlength="120" value="${esc(value('name'))}" placeholder="Ej. Equipo de terreno"></div>
+ <div><label class="field-label" for="teamCode">Código *</label><input class="field" id="teamCode" required maxlength="40" value="${esc(value('code'))}" placeholder="Código del equipo"></div>
+ <div><label class="field-label" for="teamName">Nombre del equipo *</label><input class="field" id="teamName" required maxlength="120" value="${esc(value('name'))}" placeholder="Nombre del equipo"></div>
  <div><label class="field-label" for="teamType">Tipo de equipo</label><select class="field" id="teamType">${[['field','Terreno'],['topography','Topografía'],['laboratory','Laboratorio'],['inspection','Inspección'],['maintenance','Mantenimiento'],['administration','Administración'],['other','Otro']].map(([v,l])=>`<option value="${v}" ${value('team_type','other')===v?'selected':''}>${l}</option>`).join('')}</select></div>
  <div><label class="field-label" for="teamActive">Estado</label><select class="field" id="teamActive"><option value="true" ${value('active',true)!==false?'selected':''}>Activo</option><option value="false" ${value('active',true)===false?'selected':''}>Inactivo</option></select></div>
- <div class="full"><label class="field-label" for="teamDescription">Descripción</label><textarea class="field" id="teamDescription" rows="3" maxlength="1000" placeholder="Funciones y responsabilidades del equipo">${esc(value('description'))}</textarea></div>
+ <div class="full"><label class="field-label" for="teamDescription">Descripción</label><textarea class="field" id="teamDescription" rows="3" maxlength="1000" placeholder="Describe las funciones y responsabilidades del equipo">${esc(value('description'))}</textarea></div>
  <div class="note full">El equipo quedará vinculado al proyecto seleccionado. Su organización y proyecto no podrán cambiarse después de crearlo.</div><div class="full sub" id="teamFormStatus" role="status" aria-live="polite"></div></form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="team-save" data-id="${esc(x.id||'')}">Guardar equipo</button>`);
 }
 async function saveTeam(id=''){
@@ -1252,13 +1254,34 @@ async function saveTeam(id=''){
  if(!form?.reportValidity())return;if(!geoOrg?.id||!teamProjectId)return toast('Selecciona una organización y un proyecto.');
  const code=$('#teamCode').value.trim(),name=$('#teamName').value.trim();
  if(teamRows.some(t=>String(t.code).toLowerCase()===code.toLowerCase()&&t.id!==id))return toast('Ya existe un equipo con ese código en este proyecto.');
- const payload={code,name,team_type:$('#teamType').value,description:$('#teamDescription').value.trim()||null,active:$('#teamActive').value==='true',updated_at:new Date().toISOString()};
- if(!id){payload.organization_id=geoOrg.id;payload.project_id=teamProjectId;payload.created_by=geoCurrentUser?.id||null;}
- try{if(button){button.disabled=true;button.textContent='Guardando…'}if(status)status.textContent='Guardando equipo en Supabase…';
-  const q=id?await window.geoSupabase.from('geotracia_project_teams').update(payload).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).select('id').maybeSingle():await window.geoSupabase.from('geotracia_project_teams').insert(payload).select('id').single();
-  if(q.error)throw q.error;if(id&&!q.data)throw new Error('No se actualizó el equipo. Comprueba tus permisos de administración.');
-  $('#dialog').close();toast(id?'Equipo actualizado correctamente.':'Equipo creado correctamente.');await loadTeamsData(teamProjectId);
- }catch(e){console.error('[GEOTRACIA] Error guardando equipo',e);if(status)status.textContent='No se pudo guardar el equipo: '+(e?.message||'error desconocido');else toast('No se pudo guardar el equipo: '+(e?.message||''))}
+ const payload={code,name,team_type:$('#teamType').value,description:$('#teamDescription').value.trim()||null,active:$('#teamActive').value==='true'};
+ // En INSERT se omite updated_at: la columna tiene DEFAULT now() y el permiso INSERT por columna no la incluye.
+ // En UPDATE sí se permite actualizar updated_at mediante el GRANT específico.
+ if(id){payload.updated_at=new Date().toISOString();}
+ else{payload.organization_id=geoOrg.id;payload.project_id=teamProjectId;payload.created_by=geoCurrentUser?.id||null;}
+ try{
+  if(button){button.disabled=true;button.textContent='Guardando…'}
+  if(status)status.textContent='Guardando equipo en Supabase…';
+  // INSERT sin .select(): evita exigir SELECT como parte de la misma petición.
+  // La fila se recupera después mediante loadTeamsData(), que usa la consulta de lectura del módulo.
+  let q;
+  if(id){
+   q=await window.geoSupabase.from('geotracia_project_teams').update(payload)
+    .eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).select('id').maybeSingle();
+  }else{
+   q=await window.geoSupabase.from('geotracia_project_teams').insert(payload);
+  }
+  if(q.error)throw q.error;
+  if(id&&!q.data)throw new Error('No se actualizó el equipo. Comprueba tus permisos de administración.');
+  $('#dialog').close();
+  toast(id?'Equipo actualizado correctamente.':'Equipo creado correctamente.');
+  try{await loadTeamsData(teamProjectId)}
+  catch(refreshError){console.error('[GEOTRACIA] Equipo guardado, pero falló la actualización de la lista',refreshError);toast('El equipo se guardó, pero no se pudo actualizar la lista. Recarga el módulo.')}
+ }catch(e){
+  console.error('[GEOTRACIA] Error guardando equipo',e);
+  if(status)status.textContent='No se pudo guardar el equipo: '+(e?.message||'error desconocido');
+  else toast('No se pudo guardar el equipo: '+(e?.message||''));
+ }
  finally{if(button){button.disabled=false;button.textContent='Guardar equipo'}}
 }
 function teamMemberForm(teamId,item=null){
