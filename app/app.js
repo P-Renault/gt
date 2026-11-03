@@ -1194,12 +1194,12 @@ function teamsModule(){
   const visible=members;
   const initials=(name='')=>String(name).trim().split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase()||'U';
   const typeClass=({'field':'field','topography':'topography','laboratory':'laboratory'})[team.team_type]||'';
-  const typeLabel=({'field':'Terreno','topography':'Topografía','laboratory':'Laboratorio','quality':'Inspección / Calidad','administration':'Administración','other':'Otro'})[team.team_type]||team.team_type||'Otro';
+  const typeLabel=({'field':'Terreno','topography':'Topografía','laboratory':'Laboratorio','inspection':'Inspección','maintenance':'Mantenimiento','administration':'Administración','other':'Otro'})[team.team_type]||team.team_type||'Otro';
   return `<article class="team-card ${team.active===false?'team-card-inactive':''}">
    <div class="team-card-head"><div class="team-type-icon team-type-${typeClass}">♧</div><div class="team-card-title"><div><div class="eyebrow">${esc(typeLabel)}</div><h3>${esc(team.name)}</h3></div><span class="team-code">${esc(team.code)}</span></div>${team.active===false?'<span class="team-inactive-badge">Inactivo</span>':badge('Activo','success')}</div>
    ${team.description?`<p class="team-description">${esc(team.description)}</p>`:''}
-   <div class="team-members"><div class="team-members-head"><b>Integrantes</b><span>${members.filter(m=>m.active===true).length} activos · ${members.length} total</span></div>
-   ${visible.map(m=>{const person=teamDirectoryRows.find(x=>x.user_id===m.user_id)||{};const name=person.display_name||person.full_name||person.name||person.email||'Miembro';return `<div class="team-member-row"><span class="team-member-avatar">${esc(initials(name))}</span><span class="team-member-copy"><b>${esc(name)}</b><small>${esc(person.email||m.user_id)} · ${esc(m.team_role||'member')} · ${m.active===true?'Activo':'Inactivo'}</small></span><span class="team-member-actions"><button class="team-remove" title="Editar integrante" aria-label="Editar integrante" data-action="team-member-edit" data-id="${esc(m.id)}">✎</button><button class="team-remove" title="${m.active===true?'Desvincular integrante':'Reactivar integrante'}" aria-label="${m.active===true?'Desvincular integrante':'Reactivar integrante'}" data-action="team-member-toggle" data-id="${esc(m.id)}">${m.active===true?'−':'↻'}</button></span></div>`}).join('')||'<div class="team-empty">No hay integrantes activos en este equipo.</div>'}
+   <div class="team-members"><div class="team-members-head"><b>Integrantes</b><span>${visible.length} activos · ${members.length} total</span></div>
+   ${visible.map(m=>{const person=teamDirectoryRows.find(x=>x.user_id===m.user_id)||{};const name=person.display_name||person.full_name||person.name||person.email||'Miembro';return `<div class="team-member-row"><span class="team-member-avatar">${esc(initials(name))}</span><span class="team-member-copy"><b>${esc(name)}</b><small>${esc(person.email||m.user_id)} · ${esc(m.team_role||'member')} · ${m.active===true?'Activo':'Inactivo'}</small></span><button class="team-remove" title="Editar integrante" aria-label="Editar integrante" data-action="team-member-edit" data-id="${esc(m.id)}">✎</button></div>`}).join('')||'<div class="team-empty">No hay integrantes activos en este equipo.</div>'}
    </div><div class="team-card-actions"><button class="btn" data-action="team-member-new" data-team-id="${esc(team.id)}" ${team.active===false?'disabled':''}>＋ Agregar integrante</button><button class="btn" data-action="team-edit" data-id="${esc(team.id)}">Editar equipo</button><button class="btn ${team.active===false?'':'danger-btn'}" data-action="team-toggle" data-id="${esc(team.id)}">${team.active===false?'Activar':'Desactivar'}</button></div>
   </article>`;
  }).join('');
@@ -1244,7 +1244,7 @@ function teamForm(item=null){
  dialog(item?'Editar equipo':'Crear equipo',`<form id="teamForm" class="form-grid">
  <div><label class="field-label" for="teamCode">Código *</label><input class="field" id="teamCode" required maxlength="40" value="${esc(value('code'))}" placeholder="Código del equipo"></div>
  <div><label class="field-label" for="teamName">Nombre del equipo *</label><input class="field" id="teamName" required maxlength="120" value="${esc(value('name'))}" placeholder="Nombre del equipo"></div>
- <div><label class="field-label" for="teamType">Tipo de equipo</label><select class="field" id="teamType">${[['field','Terreno'],['topography','Topografía'],['laboratory','Laboratorio'],['quality','Inspección / Calidad'],['administration','Administración'],['other','Otro']].map(([v,l])=>`<option value="${v}" ${value('team_type','other')===v?'selected':''}>${l}</option>`).join('')}</select></div>
+ <div><label class="field-label" for="teamType">Tipo de equipo</label><select class="field" id="teamType">${[['field','Terreno'],['topography','Topografía'],['laboratory','Laboratorio'],['inspection','Inspección'],['maintenance','Mantenimiento'],['administration','Administración'],['other','Otro']].map(([v,l])=>`<option value="${v}" ${value('team_type','other')===v?'selected':''}>${l}</option>`).join('')}</select></div>
  <div><label class="field-label" for="teamActive">Estado</label><select class="field" id="teamActive"><option value="true" ${value('active',true)!==false?'selected':''}>Activo</option><option value="false" ${value('active',true)===false?'selected':''}>Inactivo</option></select></div>
  <div class="full"><label class="field-label" for="teamDescription">Descripción</label><textarea class="field" id="teamDescription" rows="3" maxlength="1000" placeholder="Describe las funciones y responsabilidades del equipo">${esc(value('description'))}</textarea></div>
  <div class="note full">El equipo quedará vinculado al proyecto seleccionado. Su organización y proyecto no podrán cambiarse después de crearlo.</div><div class="full sub" id="teamFormStatus" role="status" aria-live="polite"></div></form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="team-save" data-id="${esc(x.id||'')}">Guardar equipo</button>`);
@@ -1302,48 +1302,23 @@ async function saveTeamMember(id='',teamId=''){
  const team=teamRows.find(t=>t.id===teamId);if(!team||!geoOrg?.id)return toast('No se encontró el equipo o la organización.');
  const userId=id?teamMemberRows.find(m=>m.id===id)?.user_id:$('#teamMemberUser').value;if(!userId)return toast('Selecciona un integrante válido.');
  const role=$('#teamMemberRole').value,active=$('#teamMemberActive').value==='true';
- if(!['lead','member'].includes(role))return toast('El rol seleccionado no es válido.');
- try{
-  if(button){button.disabled=true;button.textContent='Guardando…'}if(status)status.textContent='Validando miembro y guardando…';
-  let result;let targetId=id;
-  if(id){
-   result=await window.geoSupabase.from('geotracia_project_team_members').update({team_role:role,active,updated_at:new Date().toISOString()}).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId);
-  }else{
+ try{if(button){button.disabled=true;button.textContent='Guardando…'}if(status)status.textContent='Validando miembro y guardando…';
+  let result;
+  if(id){result=await window.geoSupabase.from('geotracia_project_team_members').update({team_role:role,active,updated_at:new Date().toISOString()}).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).select('id').maybeSingle();}
+  else{
    const old=teamMemberRows.find(m=>m.team_id===teamId&&m.user_id===userId);
-   if(old){targetId=old.id;result=await window.geoSupabase.from('geotracia_project_team_members').update({team_role:role,active,updated_at:new Date().toISOString()}).eq('id',old.id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId);}
-   else result=await window.geoSupabase.from('geotracia_project_team_members').insert({organization_id:geoOrg.id,project_id:teamProjectId,team_id:teamId,user_id:userId,team_role:role,active,assigned_by:geoCurrentUser?.id||null});
+   if(old){result=await window.geoSupabase.from('geotracia_project_team_members').update({team_role:role,active:true,updated_at:new Date().toISOString()}).eq('id',old.id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).select('id').maybeSingle();}
+   else result=await window.geoSupabase.from('geotracia_project_team_members').insert({organization_id:geoOrg.id,project_id:teamProjectId,team_id:teamId,user_id:userId,team_role:role,active,assigned_by:geoCurrentUser?.id||null}).select('id').single();
   }
-  if(result.error)throw result.error;
-  await loadTeamsData(teamProjectId);
-  const saved=teamMemberRows.find(m=>(targetId&&m.id===targetId)||(!targetId&&m.team_id===teamId&&m.user_id===userId));
-  if(!saved||saved.team_role!==role||saved.active!==active)throw new Error('La solicitud terminó, pero el cambio no aparece en la consulta de verificación. Revisa los permisos RLS y vuelve a cargar.');
-  $('#dialog').close();toast(id?'Integrante actualizado.':(targetId?'Asignación reactivada/actualizada.':'Integrante agregado al equipo.'));
+  if(result.error)throw result.error;if(!result.data)throw new Error('No se modificó ningún integrante. Comprueba los permisos del equipo.');
+  $('#dialog').close();toast(id?'Integrante actualizado.':'Integrante agregado al equipo.');await loadTeamsData(teamProjectId);
  }catch(e){console.error('[GEOTRACIA] Error guardando integrante',e);if(status)status.textContent='No se pudo guardar el integrante: '+(e?.message||'error desconocido');else toast('No se pudo guardar el integrante: '+(e?.message||''))}
  finally{if(button){button.disabled=false;button.textContent='Guardar integrante'}}
 }
-async function toggleTeamMember(id){
- const member=teamMemberRows.find(m=>m.id===id);if(!member)return;
- const nextActive=member.active!==true;
- try{
-  const {error}=await window.geoSupabase.from('geotracia_project_team_members').update({active:nextActive,updated_at:new Date().toISOString()}).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId);
-  if(error)throw error;
-  await loadTeamsData(teamProjectId);
-  const refreshed=teamMemberRows.find(m=>m.id===id);
-  if(!refreshed||refreshed.active!==nextActive)throw new Error('No se pudo confirmar el cambio de estado del integrante.');
-  toast(nextActive?'Integrante reactivado.':'Integrante desvinculado del equipo.');
- }catch(e){toast('No se pudo cambiar el estado del integrante: '+(e?.message||''));console.error('[GEOTRACIA] Error cambiando estado del integrante',e)}
-}
-async function toggleTeam(id){
- const t=teamRows.find(x=>x.id===id);if(!t)return;const active=t.active===false;
- try{
-  const {error}=await window.geoSupabase.from('geotracia_project_teams').update({active,updated_at:new Date().toISOString()}).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId);
-  if(error)throw error;await loadTeamsData(teamProjectId);
-  const refreshed=teamRows.find(x=>x.id===id);if(!refreshed||refreshed.active!==active)throw new Error('No se pudo confirmar el cambio de estado del equipo.');
-  toast(active?'Equipo activado.':'Equipo desactivado.');
- }catch(e){toast('No se pudo cambiar el estado: '+(e?.message||''));console.error('[GEOTRACIA] Error cambiando estado del equipo',e)}
-}
+async function toggleTeam(id){const t=teamRows.find(x=>x.id===id);if(!t)return;const active=t.active===false;try{const {data,error}=await window.geoSupabase.from('geotracia_project_teams').update({active,updated_at:new Date().toISOString()}).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).select('id').maybeSingle();if(error)throw error;if(!data)throw new Error('No se actualizó el estado del equipo.');toast(active?'Equipo activado.':'Equipo desactivado.');await loadTeamsData(teamProjectId)}catch(e){toast('No se pudo cambiar el estado: '+(e?.message||''));console.error('[GEOTRACIA] Error cambiando estado del equipo',e)}}
 
 let opsProjectId='', opsRows=[], opsAssignments=[], opsMembers=[], opsLoading=false, opsError='', opsRoads=[], opsRoadGeometries={}, opsMapInstance=null, opsMapLayers=[];
+let opsAssignmentTeams=[], opsAssignmentTeamLinks=[];
 const opsStatusLabel={planned:'Programada',in_progress:'En ejecución',paused:'Pausada',pending_review:'Pendiente de revisión',completed:'Completada',cancelled:'Cancelada'};
 const opsTypeLabel={operation:'Operación',service:'Servicio'};
 const opsRoleLabel={project_admin:'Administrador del proyecto',supervisor:'Supervisor',operator:'Operador',viewer:'Solo lectura'};
@@ -1475,17 +1450,17 @@ async function assignOperation(){
    window.geoSupabase.from('geotracia_project_teams').select('id,name,code').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).eq('active',true).order('name'),
    window.geoSupabase.from('geotracia_project_team_members').select('team_id,user_id').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).eq('active',true)
   ]);
-  if(t.error)throw t.error;if(m.error)throw m.error;projectTeams=t.data||[];teamLinks=m.data||[];
+  if(t.error)throw t.error;if(m.error)throw m.error;projectTeams=t.data||[];teamLinks=m.data||[];opsAssignmentTeams=projectTeams;opsAssignmentTeamLinks=teamLinks;
  }catch(e){console.warn('[GEOTRACIA] No se pudo cargar la relación de equipos para asignaciones',e);}
  const teamOptions=projectTeams.map(t=>`<option value="${esc(t.id)}">${esc(t.code?t.code+' · ':'')}${esc(t.name)}</option>`).join('');
  const buildOptions=(teamId='')=>membersWithEmail.filter(m=>!teamId||teamLinks.some(link=>link.team_id===teamId&&link.user_id===m.user_id)).map(m=>`<option value="${esc(String(m.email).trim().toLowerCase())}" data-user-id="${esc(m.user_id)}" data-name="${esc(m.display_name||m.member_name||'')}">${esc(String(m.email).trim().toLowerCase())}${m.display_name||m.member_name?` · ${esc(m.display_name||m.member_name)}`:''}</option>`).join('');
  dialog('Asignar responsable a una operación',`<form id="opsAssignForm" class="form-grid">
  <div class="full"><label class="field-label" for="opsAssignOperation">Operación</label><select class="field" id="opsAssignOperation" required><option value="">Seleccionar operación…</option>${operationOptions}</select></div>
- ${projectTeams.length?`<div class="full"><label class="field-label" for="opsAssignTeam">Equipo de trabajo (opcional)</label><select class="field" id="opsAssignTeam"><option value="">Todos los miembros con acceso al proyecto</option>${teamOptions}</select><small class="sub">Al elegir un equipo, la lista de responsables se limita a sus integrantes activos.</small></div>`:''}
+ ${projectTeams.length?`<div class="full"><label class="field-label" for="opsAssignTeam">Equipo de trabajo</label><select class="field" id="opsAssignTeam" required><option value="">Seleccionar equipo activo…</option>${teamOptions}</select><small class="sub">La asignación quedará vinculada al equipo y al integrante seleccionado.</small></div>`:''}
  <div class="full"><label class="field-label" for="opsAssignEmail">Correo electrónico del responsable</label><input class="field" id="opsAssignEmail" type="email" list="opsAssignEmails" autocomplete="email" placeholder="nombre@empresa.cl" required><datalist id="opsAssignEmails">${buildOptions()}</datalist><small class="sub">Selecciona un integrante del proyecto. El identificador de Supabase se resolverá automáticamente.</small></div>
  ${field('Nombre visible del responsable','opsAssignName','Nombre y apellido')}
  <div><label class="field-label" for="opsAssignRole">Función en la operación</label><select class="field" id="opsAssignRole"><option>Responsable</option><option>Supervisor</option><option>Inspector</option><option>Ejecutor</option><option>Apoyo técnico</option></select></div>
- <div class="full note">La asignación se guardará en Supabase y quedará vinculada a la operación y al proyecto actual. El equipo funciona como filtro de integrantes; la asignación persistida se vincula al usuario.</div><div class="full sub" id="opsAssignStatus" role="status" aria-live="polite" style="overflow-wrap:anywhere;white-space:normal"></div>
+ <div class="full note">La asignación se guardará en Supabase y quedará vinculada a la operación y al proyecto actual. La asignación queda vinculada a la operación, al equipo seleccionado y al integrante.</div><div class="full sub" id="opsAssignStatus" role="status" aria-live="polite" style="overflow-wrap:anywhere;white-space:normal"></div>
  </form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="ops-assign-save">Guardar asignación</button>`);
  const email=$('#opsAssignEmail'),name=$('#opsAssignName'),team=$('#opsAssignTeam'),list=$('#opsAssignEmails');
  team?.addEventListener('change',()=>{if(list)list.innerHTML=buildOptions(team.value);if(email){email.value='';email.focus()}if(name)name.value=''});
@@ -1502,6 +1477,9 @@ async function saveOperationAssignment(){
  const email=String($('#opsAssignEmail')?.value||'').trim().toLowerCase();
  if(!opsRows.some(o=>o.id===operationId))return report('Selecciona una operación válida del proyecto.');
  if(!email)return report('Ingresa el correo electrónico del responsable.');
+ const selectedTeamId=$('#opsAssignTeam')?.value||null;
+ if(opsAssignmentTeams.length&&!selectedTeamId)return report('Selecciona un equipo de trabajo.');
+ if(selectedTeamId&&!opsAssignmentTeamLinks.some(link=>link.team_id===selectedTeamId&&opsMembers.some(m=>m.user_id===link.user_id&&String(m.email||'').trim().toLowerCase()===email)))return report('El usuario seleccionado no es integrante activo del equipo elegido.');
  try{
   if(button){button.disabled=true;button.textContent='Buscando acceso…'}
   if(status){status.style.color='';status.style.background='#eff6ff';status.style.border='1px solid #bfdbfe';status.textContent='Buscando al usuario entre los accesos autorizados del proyecto…'}
@@ -1535,6 +1513,7 @@ async function saveOperationAssignment(){
    organization_id:geoOrg.id,
    project_id:opsProjectId,
    operation_id:operationId,
+   team_id:selectedTeamId,
    user_id:access.user_id,
    member_name:$('#opsAssignName')?.value.trim()||access.display_name||email,
    assignment_role:$('#opsAssignRole')?.value||'Responsable',
@@ -1630,7 +1609,7 @@ case"forms-reload":loadFormsData(formsProjectId);break;case"forms-template-new":
 case"new-record":newRecord();break;case"new-incident":newRecord("Incidencia");break;case"save-record":saveRecord();break;case"inspection-reload":loadInspectionData(inspectionProjectId);break;case"inspection-new":newInspection();break;case"inspection-save":saveInspection();break;case"inspection-view":viewInspection(e?.dataset?.id||"");break;case"inspection-locate":selectInspectionOnMap(e?.dataset?.id||"",false);break;case"inspection-edit-status":editInspectionStatus(e?.dataset?.id||"");break;case"inspection-status-save":saveInspectionStatus(e?.dataset?.id||"");break;case"inventory-reload":loadInventoryData(inventoryProjectId);break;case"inventory-new":newInventoryItem();break;case"inventory-save":saveInventoryItem(e?.dataset?.id||"");break;case"inventory-view":viewInventoryItem(e?.dataset?.id||"");break;case"inventory-edit":editInventoryItem(e?.dataset?.id||"");break;case"inventory-locate":selectInventoryOnMap(e?.dataset?.id||"",false);break;case"incident-reload":loadIncidentData(incidentProjectId);break;case"incident-new":newIncident();break;case"incident-save":saveIncident(e?.dataset?.id||"");break;case"incident-view":viewIncident(e?.dataset?.id||"");break;case"incident-edit":newIncident(incidentRows.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"incident-edit-status":editIncidentStatus(e?.dataset?.id||"");break;case"incident-status-save":saveIncidentStatus(e?.dataset?.id||"");break;case"incident-locate":selectIncidentOnMap(e?.dataset?.id||"",false);break;case"kilometraje-reload":loadKilometrajeData(kmProjectId);break;
 case"dashboard-refresh":loadDashboardData();break;case"dashboard-projects-retry":geoProjectsPromise=null;geoProjectsError='';geoOrg=null;geoProjects=[];loadGeoProjects().then(()=>{if(active==='dashboard')loadDashboardData();else show()});break;case"dashboard-export":exportDashboardSummary();break;case"project-roads-open":openProjectRoads(e?.dataset?.projectId||"");break;case"project-road-new":newProjectRoad(e?.dataset?.projectId||"");break;case"project-road-save":saveProjectRoad(e?.dataset?.projectId||"");break;case"project-segment-new":newProjectSegment(e?.dataset?.projectId||"");break;case"project-segment-save":saveProjectSegment(e?.dataset?.projectId||"");break;case"new-project":newProject();break;case"save-project":saveGeoProject(e?.dataset?.projectId||"");break;case"reload-projects":loadGeoProjects();break;case"archive-project-confirm":confirmArchiveProject(e?.dataset?.projectId||"");break;case"export-projects":exportGeoProjects();break;case"clear-project-filters":{const a=$("#projectSearch"),b=$("#projectStatusFilter"),c=$("#projectTypeFilter");if(a)a.value="";if(b)b.value="";if(c)c.value="";show();break;}case"edit-project-from-view":{const p=geoProjects.find(x=>x.id===e?.dataset?.projectId);if(p)newProject(p);break;}
 case"new-user":toast("La creación de cuentas requiere configurar una invitación segura en Supabase Auth.");break;case"save-user":toast("No se guardan usuarios localmente. Usa invitaciones seguras.");break;case"users-reload":loadGeoUsers();break;case"member-save":saveGeoMember(e?.dataset?.id||"");break;
-case"teams-reload":loadTeamsData(teamProjectId);break;case"team-new":teamForm();break;case"team-edit":teamForm(teamRows.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"team-save":saveTeam(e?.dataset?.id||"");break;case"team-toggle":toggleTeam(e?.dataset?.id||"");break;case"team-member-new":teamMemberForm(e?.dataset?.teamId||"");break;case"team-member-edit":{const m=teamMemberRows.find(x=>x.id===(e?.dataset?.id||""));if(m)teamMemberForm(m.team_id,m);break;}case"team-member-save":saveTeamMember(e?.dataset?.id||"",e?.dataset?.teamId||"");break;case"team-member-toggle":toggleTeamMember(e?.dataset?.id||"");break;case"ops-reload":loadOperationsData(opsProjectId);break;case"ops-new":newOperation();break;case"ops-edit":newOperation(opsRows.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"ops-view":viewOperation(e?.dataset?.id||"");break;case"ops-save":saveOperation(e?.dataset?.id||"");break;case"ops-export":exportOperations();break;case"ops-assign":assignOperation();break;case"ops-assign-save":saveOperationAssignment();break;case"ops-access":manageProjectAccess();break;case"ops-role-edit":manageProjectAccess(opsMembers.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"ops-access-save":saveProjectAccess(e?.dataset?.id||"");break;
+case"teams-reload":loadTeamsData(teamProjectId);break;case"team-new":teamForm();break;case"team-edit":teamForm(teamRows.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"team-save":saveTeam(e?.dataset?.id||"");break;case"team-toggle":toggleTeam(e?.dataset?.id||"");break;case"team-member-new":teamMemberForm(e?.dataset?.teamId||"");break;case"team-member-edit":{const m=teamMemberRows.find(x=>x.id===(e?.dataset?.id||""));if(m)teamMemberForm(m.team_id,m);break;}case"team-member-save":saveTeamMember(e?.dataset?.id||"",e?.dataset?.teamId||"");break;case"ops-reload":loadOperationsData(opsProjectId);break;case"ops-new":newOperation();break;case"ops-edit":newOperation(opsRows.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"ops-view":viewOperation(e?.dataset?.id||"");break;case"ops-save":saveOperation(e?.dataset?.id||"");break;case"ops-export":exportOperations();break;case"ops-assign":assignOperation();break;case"ops-assign-save":saveOperationAssignment();break;case"ops-access":manageProjectAccess();break;case"ops-role-edit":manageProjectAccess(opsMembers.find(x=>x.id===(e?.dataset?.id||""))||null);break;case"ops-access-save":saveProjectAccess(e?.dataset?.id||"");break;
 case"export-csv":exportRecords();break;case"export-users":exportFile("geotracia-usuarios.csv","Nombre,Correo,Rol,Organización,Estado\\n"+users.map(u=>[u.name,u.email,u.role,u.org,u.state].join(",")).join("\\n"),"text/csv");toast("Usuarios exportados");break;
 case"new-road":dialog("Nuevo camino",`<form id="roadForm" class="form-grid">${field("Código","roadCode","Ej. R-720")}${field("Nombre del camino","roadName","Nombre oficial")}${field("Progresiva inicial","roadStart","Km 0+000")}${field("Progresiva final","roadEnd","Km 10+000")}<div class="note full">Formulario de evaluación; persistencia de caminos pendiente.</div></form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="save-road">Validar formulario</button>`);break;
 case"save-road":if(!$("#roadForm").reportValidity())return;$("#dialog").close();toast("Formulario validado; guardado real pendiente");break;
