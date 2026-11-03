@@ -307,129 +307,64 @@
 /* GEOTRACIA · Desktop experience refinement 2026-11-03
    Scope: desktop/tablet only. Mobile layout and interactions remain unchanged. */
 @media (min-width: 1001px) {
-  .bottom-nav { display: none !important; }
-  .main { min-width: 0; }
-  #content { max-width: 1880px; padding: 30px clamp(26px, 2.4vw, 42px); }
-  .heading { align-items: center; margin-bottom: 24px; }
-  .heading h1 { font-size: clamp(25px, 1.8vw, 31px); line-height: 1.2; }
-  .heading p { font-size: 13px; max-width: 780px; }
-  .eyebrow { font-size: 10px; letter-spacing: 1.15px; }
-  .kpis { gap: 14px; margin-bottom: 20px; }
-  .kpi { min-height: 104px; padding: 18px 16px; gap: 13px; border-radius: 13px; }
-  .kpi-icon { width: 44px; height: 44px; border-radius: 12px; font-size: 20px; }
-  .kpi strong { font-size: clamp(20px, 1.45vw, 26px); line-height: 1.2; white-space: normal; overflow-wrap: anywhere; }
-  .kpi label { font-size: 11px; line-height: 1.35; }
-  .kpi small { font-size: 10px; line-height: 1.45; }
-  .grid2, .grid3, .module-layout { gap: 20px; margin-bottom: 20px; }
-  .module-layout { grid-template-columns: minmax(0, 1.55fr) minmax(330px, .9fr); }
-  .panel { border-radius: 14px; box-shadow: 0 4px 18px rgba(20, 48, 72, .045); }
-  .panel-head { padding: 20px 22px 15px; }
-  .panel h2 { font-size: 15px; line-height: 1.35; }
-  .sub { font-size: 11px; line-height: 1.55; }
-  .panel-body { padding: 0 22px 21px; }
-  .btn { min-height: 39px; padding: 10px 15px; border-radius: 9px; font-size: 11px; }
-  .field, input.field, select.field, textarea.field { min-height: 41px; font-size: 12px; }
-  .table-tools { padding: 0 20px 14px; }
-  .table-scroll { max-width: 100%; }
-  table { width: 100%; }
-  th { font-size: 10px; letter-spacing: .65px; padding: 14px 13px; }
-  td { font-size: 11px; line-height: 1.45; padding: 14px 13px; }
-  .cell-sub { font-size: 10px; }
-  .pagination { padding: 14px 20px; }
-  .settings-row { padding: 13px 0; gap: 13px; }
-  .setting-copy b { font-size: 12px; }
-  .setting-copy small { font-size: 10px; line-height: 1.45; }
-  .quick-grid { gap: 12px; }
-  .quick { min-height: 82px; padding: 13px; }
-  .quick b { font-size: 11px; }
-  .quick small { font-size: 10px; }
-  .footer { padding: 17px clamp(26px, 2.4vw, 42px) 20px; font-size: 10px; }
+  body.geo-authenticated .bottom-nav { display: none !important; }
+  body.geo-authenticated .main { min-width: 0; }
+  body.geo-authenticated #content { max-width: 1880px; padding: 30px clamp(26px, 2.4vw, 42px); }
+  body.geo-authenticated .heading { align-items: center; margin-bottom: 24px; }
+  body.geo-authenticated .heading h1 { font-size: clamp(25px, 1.8vw, 31px); line-height: 1.2; }
+  body.geo-authenticated .heading p { font-size: 13px; max-width: 780px; }
+  body.geo-authenticated .eyebrow { font-size: 10px; letter-spacing: 1.15px; }
+  body.geo-authenticated .kpis { gap: 14px; margin-bottom: 20px; }
+  body.geo-authenticated .kpi { min-height: 104px; padding: 18px 16px; gap: 13px; border-radius: 13px; }
+  body.geo-authenticated .kpi-icon { width: 44px; height: 44px; border-radius: 12px; font-size: 20px; }
+  body.geo-authenticated .kpi strong { font-size: clamp(20px, 1.45vw, 26px); line-height: 1.2; white-space: normal; overflow-wrap: anywhere; }
+  body.geo-authenticated .kpi label { font-size: 11px; line-height: 1.35; }
+  body.geo-authenticated .kpi small { font-size: 10px; line-height: 1.45; }
+  body.geo-authenticated .grid2, body.geo-authenticated .grid3, body.geo-authenticated .module-layout { gap: 20px; margin-bottom: 20px; }
+  body.geo-authenticated .module-layout { grid-template-columns: minmax(0, 1.55fr) minmax(330px, .9fr); }
+  body.geo-authenticated .panel { border-radius: 14px; box-shadow: 0 4px 18px rgba(20, 48, 72, .045); }
+  body.geo-authenticated .panel-head { padding: 20px 22px 15px; }
+  body.geo-authenticated .panel h2 { font-size: 15px; line-height: 1.35; }
+  body.geo-authenticated .sub { font-size: 11px; line-height: 1.55; }
+  body.geo-authenticated .panel-body { padding: 0 22px 21px; }
+  body.geo-authenticated .btn { min-height: 39px; padding: 10px 15px; border-radius: 9px; font-size: 11px; }
+  body.geo-authenticated .field, body.geo-authenticated input.field, body.geo-authenticated select.field, body.geo-authenticated textarea.field { min-height: 41px; font-size: 12px; }
+  body.geo-authenticated .table-tools { padding: 0 20px 14px; }
+  body.geo-authenticated .table-scroll { max-width: 100%; }
+  body.geo-authenticated table { width: 100%; }
+  body.geo-authenticated th { font-size: 10px; letter-spacing: .65px; padding: 14px 13px; }
+  body.geo-authenticated td { font-size: 11px; line-height: 1.45; padding: 14px 13px; }
+  body.geo-authenticated .cell-sub { font-size: 10px; }
+  body.geo-authenticated .pagination { padding: 14px 20px; }
+  body.geo-authenticated .settings-row { padding: 13px 0; gap: 13px; }
+  body.geo-authenticated .setting-copy b { font-size: 12px; }
+  body.geo-authenticated .setting-copy small { font-size: 10px; line-height: 1.45; }
+  body.geo-authenticated .quick-grid { gap: 12px; }
+  body.geo-authenticated .quick { min-height: 82px; padding: 13px; }
+  body.geo-authenticated .quick b { font-size: 11px; }
+  body.geo-authenticated .quick small { font-size: 10px; }
+  body.geo-authenticated .footer { padding: 17px clamp(26px, 2.4vw, 42px) 20px; font-size: 10px; }
   /* Administration: reserve sufficient width for all four plan cards. */
-  #subscriptionAdminContent > .module-layout {
+  body.geo-authenticated #subscriptionAdminContent > .module-layout {
     grid-template-columns: minmax(0, 1fr) minmax(560px, 1.22fr);
     align-items: start;
     gap: 20px;
   }
-  #subscriptionAdminContent .plans-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
-  #subscriptionAdminContent .plans-grid .plan { padding: 18px; }
-  #subscriptionAdminContent .plans-grid .plan h3 { font-size: 16px; line-height: 1.3; }
-  #subscriptionAdminContent .plans-grid .price { font-size: clamp(22px, 1.8vw, 29px); line-height: 1.25; overflow-wrap: normal; word-break: normal; }
-  #subscriptionAdminContent .plans-grid .plan li { font-size: 11px; line-height: 1.5; }
-  #subscriptionAdminContent .billing-toolbar { align-items: center; gap: 16px; }
-  #subscriptionAdminContent .billing-toolbar > div:first-child { min-width: 0; }
-  #subscriptionAdminContent .billing-switch { flex: 0 0 auto; }
+  body.geo-authenticated #subscriptionAdminContent .plans-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+  body.geo-authenticated #subscriptionAdminContent .plans-grid .plan { padding: 18px; }
+  body.geo-authenticated #subscriptionAdminContent .plans-grid .plan h3 { font-size: 16px; line-height: 1.3; }
+  body.geo-authenticated #subscriptionAdminContent .plans-grid .price { font-size: clamp(22px, 1.8vw, 29px); line-height: 1.25; overflow-wrap: normal; word-break: normal; }
+  body.geo-authenticated #subscriptionAdminContent .plans-grid .plan li { font-size: 11px; line-height: 1.5; }
+  body.geo-authenticated #subscriptionAdminContent .billing-toolbar { align-items: center; gap: 16px; }
+  body.geo-authenticated #subscriptionAdminContent .billing-toolbar > div:first-child { min-width: 0; }
+  body.geo-authenticated #subscriptionAdminContent .billing-switch { flex: 0 0 auto; }
 }
 @media (min-width: 1500px) {
-  .kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .grid2 { grid-template-columns: minmax(0, 1.6fr) minmax(360px, 1fr); }
-  #subscriptionAdminContent > .module-layout { grid-template-columns: minmax(0, 1fr) minmax(650px, 1.35fr); }
-  #subscriptionAdminContent .plans-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  body.geo-authenticated .kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  body.geo-authenticated .grid2 { grid-template-columns: minmax(0, 1.6fr) minmax(360px, 1fr); }
+  body.geo-authenticated #subscriptionAdminContent > .module-layout { grid-template-columns: minmax(0, 1fr) minmax(650px, 1.35fr); }
+  body.geo-authenticated #subscriptionAdminContent .plans-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (min-width: 701px) and (max-width: 1000px) {
-  .bottom-nav { display: none !important; }
-}
-
-
-/* GEOTRACIA · Desktop polish pass 2 — Dashboard + Flow tables
-   Strictly desktop/tablet; mobile styles and markup behavior are preserved. */
-@media (min-width: 1001px) {
-  /* Let operational priority cards size to their content instead of stretching
-     an empty-state panel to the height of the activity feed. */
-  .dash-priority-grid {
-    align-items: start !important;
-    grid-auto-rows: auto;
-  }
-  .dash-priority-grid > .panel:first-child .panel-body {
-    min-height: 0 !important;
-    padding-bottom: 18px !important;
-  }
-  .dash-priority-grid .dash-empty-state {
-    min-height: 0 !important;
-    max-width: 100%;
-    margin: 0 !important;
-    padding: 13px 15px !important;
-    line-height: 1.55 !important;
-  }
-
-  /* Improve chart legibility without changing chart data or geometry. */
-  .dash-chart-grid .panel-head { padding-bottom: 14px; }
-  .dash-chart-caption { color: #60758a !important; font-size: 11px !important; }
-  .dash-chart-legend, .dash-trend-legend { color: #526b80 !important; }
-  .dash-trend-real text { font-size: 11px !important; }
-
-  /* Payment trace: keep all six columns readable and scroll within the card. */
-  #subscriptionAdminContent .flow-payments-scroll {
-    width: 100%;
-    max-width: 100%;
-    overflow-x: auto !important;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
-  }
-  #subscriptionAdminContent .flow-payments-table {
-    width: 100%;
-    min-width: 920px;
-    table-layout: auto;
-  }
-  #subscriptionAdminContent .flow-payments-table th,
-  #subscriptionAdminContent .flow-payments-table td {
-    white-space: normal;
-    vertical-align: middle;
-  }
-  #subscriptionAdminContent .flow-payments-table th:nth-child(4),
-  #subscriptionAdminContent .flow-payments-table td:nth-child(4) {
-    min-width: 190px;
-    max-width: 240px;
-  }
-  #subscriptionAdminContent .flow-payments-table td:nth-child(4) code {
-    display: inline-block;
-    max-width: 220px;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-  #subscriptionAdminContent .flow-payments-table th:last-child,
-  #subscriptionAdminContent .flow-payments-table td:last-child {
-    min-width: 125px;
-  }
+  body.geo-authenticated .bottom-nav { display: none !important; }
 }
