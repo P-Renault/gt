@@ -368,3 +368,68 @@
 @media (min-width: 701px) and (max-width: 1000px) {
   .bottom-nav { display: none !important; }
 }
+
+
+/* GEOTRACIA · Desktop polish pass 2 — Dashboard + Flow tables
+   Strictly desktop/tablet; mobile styles and markup behavior are preserved. */
+@media (min-width: 1001px) {
+  /* Let operational priority cards size to their content instead of stretching
+     an empty-state panel to the height of the activity feed. */
+  .dash-priority-grid {
+    align-items: start !important;
+    grid-auto-rows: auto;
+  }
+  .dash-priority-grid > .panel:first-child .panel-body {
+    min-height: 0 !important;
+    padding-bottom: 18px !important;
+  }
+  .dash-priority-grid .dash-empty-state {
+    min-height: 0 !important;
+    max-width: 100%;
+    margin: 0 !important;
+    padding: 13px 15px !important;
+    line-height: 1.55 !important;
+  }
+
+  /* Improve chart legibility without changing chart data or geometry. */
+  .dash-chart-grid .panel-head { padding-bottom: 14px; }
+  .dash-chart-caption { color: #60758a !important; font-size: 11px !important; }
+  .dash-chart-legend, .dash-trend-legend { color: #526b80 !important; }
+  .dash-trend-real text { font-size: 11px !important; }
+
+  /* Payment trace: keep all six columns readable and scroll within the card. */
+  #subscriptionAdminContent .flow-payments-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+  #subscriptionAdminContent .flow-payments-table {
+    width: 100%;
+    min-width: 920px;
+    table-layout: auto;
+  }
+  #subscriptionAdminContent .flow-payments-table th,
+  #subscriptionAdminContent .flow-payments-table td {
+    white-space: normal;
+    vertical-align: middle;
+  }
+  #subscriptionAdminContent .flow-payments-table th:nth-child(4),
+  #subscriptionAdminContent .flow-payments-table td:nth-child(4) {
+    min-width: 190px;
+    max-width: 240px;
+  }
+  #subscriptionAdminContent .flow-payments-table td:nth-child(4) code {
+    display: inline-block;
+    max-width: 220px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  #subscriptionAdminContent .flow-payments-table th:last-child,
+  #subscriptionAdminContent .flow-payments-table td:last-child {
+    min-width: 125px;
+  }
+}
