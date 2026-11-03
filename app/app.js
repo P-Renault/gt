@@ -1317,11 +1317,46 @@ async function saveTeamMember(id='',teamId=''){
 }
 async function toggleTeam(id){const t=teamRows.find(x=>x.id===id);if(!t)return;const active=t.active===false;try{const {data,error}=await window.geoSupabase.from('geotracia_project_teams').update({active,updated_at:new Date().toISOString()}).eq('id',id).eq('organization_id',geoOrg.id).eq('project_id',teamProjectId).select('id').maybeSingle();if(error)throw error;if(!data)throw new Error('No se actualizó el estado del equipo.');toast(active?'Equipo activado.':'Equipo desactivado.');await loadTeamsData(teamProjectId)}catch(e){toast('No se pudo cambiar el estado: '+(e?.message||''));console.error('[GEOTRACIA] Error cambiando estado del equipo',e)}}
 
-let opsProjectId='', opsRows=[], opsAssignments=[], opsMembers=[], opsTeams=[], opsLoading=false, opsError='', opsRoads=[], opsRoadGeometries={}, opsMapInstance=null, opsMapLayers=[];
-let opsAssignmentTeams=[], opsAssignmentTeamLinks=[];
+let opsProjectId='', opsRows=[], opsAssignments=[], opsMembers=[], opsLoading=false, opsError='', opsRoads=[], opsRoadGeometries={}, opsMapInstance=null, opsMapLayers=[];
 const opsStatusLabel={planned:'Programada',in_progress:'En ejecución',paused:'Pausada',pending_review:'Pendiente de revisión',completed:'Completada',cancelled:'Cancelada'};
 const opsTypeLabel={operation:'Operación',service:'Servicio'};
 const opsRoleLabel={project_admin:'Administrador del proyecto',supervisor:'Supervisor',operator:'Operador',viewer:'Solo lectura'};
+async function viewOperation(id){
+ const op=opsRows.find(x=>x.id===id);
+ if(!op)return toast('No se encontró la operación seleccionada. Actualiza el módulo e inténtalo nuevamente.');
+ const road=opsRoads.find(r=>r.id===op.road_id);
+ const assignments=opsAssignments.filter(a=>a.operation_id===op.id);
+ let teamMap={};
+ const teamIds=[...new Set(assignments.map(a=>a.team_id).filter(Boolean))];
+ if(teamIds.length&&window.geoSupabase){
+  try{
+   const {data,error}=await window.geoSupabase.from('geotracia_project_teams').select('id,code,name,team_type,active').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).in('id',teamIds);
+   if(error)throw error;
+   teamMap=Object.fromEntries((data||[]).map(t=>[t.id,t]));
+  }catch(err){console.warn('[GEOTRACIA] No se pudieron resolver los equipos de la operación',err)}
+ }
+ const status=opsStatusLabel[op.status]||op.status||'—';
+ const priority=({low:'Baja',normal:'Normal',high:'Alta',critical:'Crítica'})[op.priority]||op.priority||'—';
+ const fmtDate=v=>v?new Date(`${String(v).slice(0,10)}T00:00:00`).toLocaleDateString('es-CL'):'—';
+ const assignmentRows=assignments.map(a=>{
+  const t=teamMap[a.team_id];
+  return `<tr><td><b>${esc(t?(t.code?t.code+' · ':'')+t.name:'Sin equipo vinculado')}</b><div class="cell-sub">${t?esc(t.team_type||'Equipo')+(t.active===false?' · Inactivo':''):''}</div></td><td>${esc(a.member_name||a.user_email||a.user_id||'Usuario')}</td><td>${esc(a.assignment_role||'Responsable')}</td><td>${esc(a.status||'Activa')}</td><td>${a.created_at?esc(new Date(a.created_at).toLocaleString('es-CL')):'—'}</td></tr>`
+ }).join('');
+ const body=`<div class="project-detail">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${badge(status,op.status==='completed'?'success':op.status==='paused'?'warning':'info')}${badge(priority,op.priority==='critical'?'danger':op.priority==='high'?'warning':'info')}</div>
+  <h3>${esc(op.title||'Operación sin título')}</h3>
+  <p class="sub">${esc(op.code||'Sin código')} · ${esc(opsTypeLabel[op.kind]||op.kind||'Operación')}</p>
+  <div class="form-grid">
+   ${[['Proyecto',geoProjects.find(p=>p.id===opsProjectId)?.name||'—'],['Camino',road?.name||op.location||'—'],['Progresiva',op.km_progressive==null?'No registrada':`Km ${Number(op.km_progressive).toFixed(3)}`],['Responsable principal',op.assignee_name||'Sin asignar'],['Fecha de inicio',fmtDate(op.start_date)],['Fecha límite',fmtDate(op.due_date)]].map(([l,v])=>`<div><label class="field-label">${esc(l)}</label><div>${esc(v)}</div></div>`).join('')}
+   <div class="full"><label class="field-label">Descripción y alcance</label><p>${esc(op.description||'Sin descripción registrada')}</p></div>
+   <div class="full"><label class="field-label">Notas de ejecución</label><p>${esc(op.notes||'Sin notas registradas')}</p></div>
+  </div>
+  <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+  <h3>Equipo e integrantes asignados</h3>
+  <div class="table-scroll"><table><thead><tr><th>EQUIPO</th><th>INTEGRANTE</th><th>FUNCIÓN</th><th>ESTADO</th><th>FECHA</th></tr></thead><tbody>${assignmentRows||'<tr><td colspan="5"><div class="empty">Esta operación todavía no tiene asignaciones registradas.</div></td></tr>'}</tbody></table></div>
+ </div>`;
+ dialog('Detalle de operación',body,`<button class="btn" data-close>Cerrar</button><button class="btn primary" data-action="ops-edit" data-id="${esc(op.id)}">Editar operación</button>`);
+}
 function operationsModule(){
  const projects=geoProjects.filter(p=>p.status!=='archived');
  const selected=projects.find(p=>p.id===opsProjectId);
@@ -1332,11 +1367,11 @@ function operationsModule(){
  return `${head('Operaciones y permisos','Control operativo, servicios, responsables y acceso por proyecto.',btn('↻ Actualizar','ops-reload')+btn('↓ Exportar CSV','ops-export')+btn('＋ Nueva operación','ops-new','primary'))}
  <section class="panel"><div class="panel-head"><div><h2>Proyecto de trabajo</h2><div class="sub">Los registros se consultan desde Supabase y quedan aislados por organización y proyecto.</div></div></div><div class="panel-body"><label class="field-label" for="opsProjectSelect">Proyecto</label><select class="field" id="opsProjectSelect" ${projects.length?'':'disabled'}><option value="">Seleccionar proyecto…</option>${opts}</select>${!window.geoSupabase?'<div class="note">Supabase no está configurado. No se mostrarán datos de ejemplo.</div>':''}${!geoOrg?'<div class="note">No se ha cargado la organización del usuario. Abre Proyectos o inicia sesión.</div>':''}${opsError?`<div class="note">${esc(opsError)}</div>`:''}${opsLoading?'<p class="sub">Cargando operaciones y permisos…</p>':''}</div></section>
  <div class="kpis">${kpi(rows.length,'Operaciones y servicios','Registros del proyecto','▤')}${kpi(open,'Abiertas','Programadas o en ejecución','◷','amber')}${kpi(done,'Completadas','Cierre registrado','✓','teal')}${kpi(opsAssignments.length,'Asignaciones','Responsables y equipos','♙','purple')}</div>
- <div class="module-layout"><div class="stack">${panel('Registro operativo',`<div class="table-scroll"><table><thead><tr><th>CÓDIGO / TIPO</th><th>OPERACIÓN / SERVICIO</th><th>ESTADO</th><th>PRIORIDAD</th><th>RESPONSABLE</th><th>FECHAS</th><th>ACCIONES</th></tr></thead><tbody>${table||`<tr><td colspan="7"><div class="empty">${opsLoading?'Consultando datos…':'No hay operaciones para este proyecto. Crea la primera operación o servicio.'}</div></td></tr>`}</tbody></table></div><div class="pagination"><span>${rows.length} registros persistidos</span>${btn('＋ Nueva operación','ops-new','primary')}</div>`,'Operaciones y servicios con persistencia real en PostgreSQL')}${panel('Asignaciones y trazabilidad',`<div class="table-scroll"><table><thead><tr><th>OPERACIÓN</th><th>EQUIPO</th><th>INTEGRANTE</th><th>FUNCIÓN</th><th>ESTADO</th><th>FECHA DE ASIGNACIÓN</th></tr></thead><tbody>${opsAssignments.map(a=>{const team=opsTeams.find(t=>t.id===a.team_id);const assignedAt=a.created_at?new Date(a.created_at).toLocaleString('es-CL',{dateStyle:'short',timeStyle:'short'}):'—';return '<tr><td>'+esc(a.operation_title||a.operation_id)+'</td><td>'+(team?esc([team.code,team.name].filter(Boolean).join(' · ')):'<span class="sub">Sin equipo vinculado</span>')+'</td><td>'+esc(a.member_name||a.user_email||'Usuario')+'</td><td>'+esc(a.assignment_role||'Responsable')+'</td><td>'+esc(a.status||'Activa')+'</td><td>'+esc(assignedAt)+'</td></tr>'}).join('')||'<tr><td colspan="6">No hay asignaciones registradas.</td></tr>'}</tbody></table></div><div class="panel-body">${btn('＋ Asignar responsable','ops-assign', 'primary')}</div>`,'Trazabilidad de equipo, integrante, función, estado y fecha de asignación')}</div>
+ <div class="module-layout"><div class="stack">${panel('Registro operativo',`<div class="table-scroll"><table><thead><tr><th>CÓDIGO / TIPO</th><th>OPERACIÓN / SERVICIO</th><th>ESTADO</th><th>PRIORIDAD</th><th>RESPONSABLE</th><th>FECHAS</th><th>ACCIONES</th></tr></thead><tbody>${table||`<tr><td colspan="7"><div class="empty">${opsLoading?'Consultando datos…':'No hay operaciones para este proyecto. Crea la primera operación o servicio.'}</div></td></tr>`}</tbody></table></div><div class="pagination"><span>${rows.length} registros persistidos</span>${btn('＋ Nueva operación','ops-new','primary')}</div>`,'Operaciones y servicios con persistencia real en PostgreSQL')}${panel('Asignaciones del proyecto',`<div class="table-scroll"><table><thead><tr><th>OPERACIÓN</th><th>PERSONA</th><th>FUNCIÓN</th><th>ASIGNACIÓN</th></tr></thead><tbody>${opsAssignments.map(a=>`<tr><td>${esc(a.operation_title||a.operation_id)}</td><td>${esc(a.member_name||a.user_email||'Usuario')}</td><td>${esc(a.assignment_role||'Responsable')}</td><td>${esc(a.status||'Activa')}</td></tr>`).join('')||'<tr><td colspan="4">No hay asignaciones registradas.</td></tr>'}</tbody></table></div><div class="panel-body">${btn('＋ Asignar responsable','ops-assign', 'primary')}</div>`,'Responsables vinculados a operaciones del proyecto')}</div>
  <div class="stack">${panel('Mapa de operaciones',`<div id="opsMap" style="height:320px;min-height:280px;border-radius:12px;overflow:hidden;background:#eef2f7"></div><p id="opsMapStatus" class="sub" style="margin-top:10px">Cargando caminos y ubicaciones…</p>`,'Caminos del proyecto y puntos de operación')}${panel('Accesos y roles del proyecto',`<div class="sub" style="margin-bottom:12px">Los permisos se aplican en Supabase mediante RLS; esta pantalla no sustituye las políticas del servidor.</div><div class="table-scroll"><table><thead><tr><th>MIEMBRO</th><th>ROL</th><th>ESTADO</th><th></th></tr></thead><tbody>${opsMembers.map(m=>`<tr><td><b>${esc(m.display_name||m.email||'Miembro')}</b><div class="sub">${esc(m.email||'')}</div></td><td>${esc(opsRoleLabel[m.project_role]||m.project_role||'Solo lectura')}</td><td>${badge(m.active?'Activo':'Inactivo',m.active?'success':'warning')}</td><td><button class="btn" data-action="ops-role-edit" data-id="${esc(m.id)}">Cambiar rol</button></td></tr>`).join('')||'<tr><td colspan="4">No se han cargado miembros del proyecto.</td></tr>'}</tbody></table></div><div class="panel-body">${btn('＋ Dar acceso al proyecto','ops-access','primary')}</div>`,'Miembros y permisos por proyecto')}${panel('Trazabilidad',`<div class="settings-row"><span class="setting-icon">▤</span><span class="setting-copy"><b>Auditoría de operaciones</b><small>Creaciones y cambios registran actor, entidad y fecha.</small></span></div><div class="settings-row"><span class="setting-icon">♢</span><span class="setting-copy"><b>Control de acceso</b><small>La base de datos valida la membresía y el rol.</small></span></div>`,'Seguridad y seguimiento')}</div></div>`;
 }
 async function loadOperationsData(projectId=opsProjectId){
- opsProjectId=projectId||'';opsRows=[];opsAssignments=[];opsMembers=[];opsTeams=[];opsError='';
+ opsProjectId=projectId||'';opsRows=[];opsAssignments=[];opsMembers=[];opsError='';
  if(!window.geoSupabase){opsError='Supabase no está configurado.';show();return}
  if(!geoProjects.length){opsError='No hay proyectos cargados para esta organización.';show();return}
  if(!opsProjectId){opsProjectId=geoProjects.find(p=>p.status!=='archived')?.id||''}
@@ -1344,15 +1379,14 @@ async function loadOperationsData(projectId=opsProjectId){
  opsLoading=true;show();
  try{
   const c=window.geoSupabase;
-  const [r,a,m,roads,teams]=await Promise.all([
+  const [r,a,m,roads]=await Promise.all([
    c.from('geotracia_operations').select('*').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).order('created_at',{ascending:false}),
    c.from('geotracia_operation_assignments').select('*, geotracia_operations(title)').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).order('created_at',{ascending:false}),
    c.from('geotracia_project_access').select('*').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).order('created_at',{ascending:false}),
-   c.from('roads').select('id,organization_id,project_id,code,name,length_m,intervention_start_km,intervention_end_km').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).order('code'),
-   c.from('geotracia_project_teams').select('id,code,name').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId)
+   c.from('roads').select('id,organization_id,project_id,code,name,length_m,intervention_start_km,intervention_end_km').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).order('code')
   ]);
-  if(r.error)throw r.error;if(a.error)throw a.error;if(m.error)throw m.error;if(roads.error)throw roads.error;if(teams.error)throw teams.error;
-  opsRows=r.data||[];opsAssignments=(a.data||[]).map(x=>({...x,operation_title:x.geotracia_operations?.title}));opsMembers=m.data||[];opsRoads=roads.data||[];opsTeams=teams.data||[];opsRoadGeometries={};
+  if(r.error)throw r.error;if(a.error)throw a.error;if(m.error)throw m.error;if(roads.error)throw roads.error;
+  opsRows=r.data||[];opsAssignments=(a.data||[]).map(x=>({...x,operation_title:x.geotracia_operations?.title}));opsMembers=m.data||[];opsRoads=roads.data||[];opsRoadGeometries={};
   try{const gr=await c.rpc('geotracia_inventory_road_geometries',{p_project_id:opsProjectId});if(!gr.error)for(const g of (gr.data||[])){let geom=g.road_geojson||g.geojson||g.geom_geojson;if(typeof geom==='string'){try{geom=JSON.parse(geom)}catch{geom=null}}if(g.road_id&&geom)opsRoadGeometries[g.road_id]={geojson:geom,length_m:g.length_m==null?null:Number(g.length_m)}}}catch(geoErr){console.warn('[GEOTRACIA] No se cargaron geometrías de operaciones',geoErr)}
  }catch(e){opsError='No se pudieron cargar los datos: '+(e.message||'error de Supabase')+'. Ejecuta la migración SQL del módulo y vuelve a intentar.'}
  finally{opsLoading=false;show()}
@@ -1451,17 +1485,17 @@ async function assignOperation(){
    window.geoSupabase.from('geotracia_project_teams').select('id,name,code').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).eq('active',true).order('name'),
    window.geoSupabase.from('geotracia_project_team_members').select('team_id,user_id').eq('organization_id',geoOrg.id).eq('project_id',opsProjectId).eq('active',true)
   ]);
-  if(t.error)throw t.error;if(m.error)throw m.error;projectTeams=t.data||[];teamLinks=m.data||[];opsAssignmentTeams=projectTeams;opsAssignmentTeamLinks=teamLinks;
+  if(t.error)throw t.error;if(m.error)throw m.error;projectTeams=t.data||[];teamLinks=m.data||[];
  }catch(e){console.warn('[GEOTRACIA] No se pudo cargar la relación de equipos para asignaciones',e);}
  const teamOptions=projectTeams.map(t=>`<option value="${esc(t.id)}">${esc(t.code?t.code+' · ':'')}${esc(t.name)}</option>`).join('');
  const buildOptions=(teamId='')=>membersWithEmail.filter(m=>!teamId||teamLinks.some(link=>link.team_id===teamId&&link.user_id===m.user_id)).map(m=>`<option value="${esc(String(m.email).trim().toLowerCase())}" data-user-id="${esc(m.user_id)}" data-name="${esc(m.display_name||m.member_name||'')}">${esc(String(m.email).trim().toLowerCase())}${m.display_name||m.member_name?` · ${esc(m.display_name||m.member_name)}`:''}</option>`).join('');
  dialog('Asignar responsable a una operación',`<form id="opsAssignForm" class="form-grid">
  <div class="full"><label class="field-label" for="opsAssignOperation">Operación</label><select class="field" id="opsAssignOperation" required><option value="">Seleccionar operación…</option>${operationOptions}</select></div>
- ${projectTeams.length?`<div class="full"><label class="field-label" for="opsAssignTeam">Equipo de trabajo</label><select class="field" id="opsAssignTeam" required><option value="">Seleccionar equipo activo…</option>${teamOptions}</select><small class="sub">La asignación quedará vinculada al equipo y al integrante seleccionado.</small></div>`:''}
+ ${projectTeams.length?`<div class="full"><label class="field-label" for="opsAssignTeam">Equipo de trabajo (opcional)</label><select class="field" id="opsAssignTeam"><option value="">Todos los miembros con acceso al proyecto</option>${teamOptions}</select><small class="sub">Al elegir un equipo, la lista de responsables se limita a sus integrantes activos.</small></div>`:''}
  <div class="full"><label class="field-label" for="opsAssignEmail">Correo electrónico del responsable</label><input class="field" id="opsAssignEmail" type="email" list="opsAssignEmails" autocomplete="email" placeholder="nombre@empresa.cl" required><datalist id="opsAssignEmails">${buildOptions()}</datalist><small class="sub">Selecciona un integrante del proyecto. El identificador de Supabase se resolverá automáticamente.</small></div>
  ${field('Nombre visible del responsable','opsAssignName','Nombre y apellido')}
  <div><label class="field-label" for="opsAssignRole">Función en la operación</label><select class="field" id="opsAssignRole"><option>Responsable</option><option>Supervisor</option><option>Inspector</option><option>Ejecutor</option><option>Apoyo técnico</option></select></div>
- <div class="full note">La asignación se guardará en Supabase y quedará vinculada a la operación y al proyecto actual. La asignación queda vinculada a la operación, al equipo seleccionado y al integrante.</div><div class="full sub" id="opsAssignStatus" role="status" aria-live="polite" style="overflow-wrap:anywhere;white-space:normal"></div>
+ <div class="full note">La asignación se guardará en Supabase y quedará vinculada a la operación y al proyecto actual. El equipo funciona como filtro de integrantes; la asignación persistida se vincula al usuario.</div><div class="full sub" id="opsAssignStatus" role="status" aria-live="polite" style="overflow-wrap:anywhere;white-space:normal"></div>
  </form>`,`<button class="btn" data-close>Cancelar</button><button class="btn primary" data-action="ops-assign-save">Guardar asignación</button>`);
  const email=$('#opsAssignEmail'),name=$('#opsAssignName'),team=$('#opsAssignTeam'),list=$('#opsAssignEmails');
  team?.addEventListener('change',()=>{if(list)list.innerHTML=buildOptions(team.value);if(email){email.value='';email.focus()}if(name)name.value=''});
@@ -1478,9 +1512,6 @@ async function saveOperationAssignment(){
  const email=String($('#opsAssignEmail')?.value||'').trim().toLowerCase();
  if(!opsRows.some(o=>o.id===operationId))return report('Selecciona una operación válida del proyecto.');
  if(!email)return report('Ingresa el correo electrónico del responsable.');
- const selectedTeamId=$('#opsAssignTeam')?.value||null;
- if(opsAssignmentTeams.length&&!selectedTeamId)return report('Selecciona un equipo de trabajo.');
- if(selectedTeamId&&!opsAssignmentTeamLinks.some(link=>link.team_id===selectedTeamId&&opsMembers.some(m=>m.user_id===link.user_id&&String(m.email||'').trim().toLowerCase()===email)))return report('El usuario seleccionado no es integrante activo del equipo elegido.');
  try{
   if(button){button.disabled=true;button.textContent='Buscando acceso…'}
   if(status){status.style.color='';status.style.background='#eff6ff';status.style.border='1px solid #bfdbfe';status.textContent='Buscando al usuario entre los accesos autorizados del proyecto…'}
@@ -1514,7 +1545,6 @@ async function saveOperationAssignment(){
    organization_id:geoOrg.id,
    project_id:opsProjectId,
    operation_id:operationId,
-   team_id:selectedTeamId,
    user_id:access.user_id,
    member_name:$('#opsAssignName')?.value.trim()||access.display_name||email,
    assignment_role:$('#opsAssignRole')?.value||'Responsable',
