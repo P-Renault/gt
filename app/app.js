@@ -1326,6 +1326,17 @@ async function viewOperation(id){
  if(!op)return toast('No se encontró la operación seleccionada. Actualiza el módulo e inténtalo nuevamente.');
  const road=opsRoads.find(r=>r.id===op.road_id);
  const assignments=opsAssignments.filter(a=>a.operation_id===op.id);
+ let assignmentAudit=[], auditError='';
+ if(window.geoSupabase){
+  try{
+   const auditResult=await window.geoSupabase.from('geotracia_operation_assignment_audit')
+    .select('id,event_type,actor_id,occurred_at,old_data,new_data')
+    .eq('organization_id',geoOrg.id).eq('project_id',opsProjectId)
+    .eq('operation_id',op.id).order('occurred_at',{ascending:false}).limit(100);
+   if(auditResult.error)throw auditResult.error;
+   assignmentAudit=auditResult.data||[];
+  }catch(auditErr){auditError=auditErr?.message||'No se pudo consultar el historial';console.warn('[GEOTRACIA] Historial de asignaciones no disponible',auditErr)}
+ }
  let teamMap={};
  const teamIds=[...new Set(assignments.map(a=>a.team_id).filter(Boolean))];
  if(teamIds.length&&window.geoSupabase){
@@ -1342,6 +1353,15 @@ async function viewOperation(id){
   const t=teamMap[a.team_id];
   return `<tr><td><b>${esc(t?(t.code?t.code+' · ':'')+t.name:'Sin equipo vinculado')}</b><div class="cell-sub">${t?esc(t.team_type||'Equipo')+(t.active===false?' · Inactivo':''):''}</div></td><td>${esc(a.member_name||a.user_email||a.user_id||'Usuario')}</td><td>${esc(a.assignment_role||'Responsable')}</td><td>${esc(a.status||'Activa')}</td><td>${a.created_at?esc(new Date(a.created_at).toLocaleString('es-CL')):'—'}</td></tr>`
  }).join('');
+ const auditLabel={INSERT:'Asignación creada',UPDATE:'Asignación modificada',DELETE:'Asignación retirada'};
+ const auditRows=assignmentAudit.map(ev=>{
+  const snapshot=ev.new_data||ev.old_data||{};
+  const person=snapshot.member_name||snapshot.user_email||snapshot.user_id||'Integrante';
+  const role=snapshot.assignment_role||'Responsable';
+  const eventLabel=auditLabel[ev.event_type]||ev.event_type||'Cambio';
+  return `<div class="settings-row"><span class="setting-icon">◷</span><span class="setting-copy"><b>${esc(eventLabel)} · ${esc(person)}</b><small>Función: ${esc(role)} · Actor: ${esc(ev.actor_id||'No identificado')} · ${ev.occurred_at?esc(new Date(ev.occurred_at).toLocaleString('es-CL')):'Fecha no disponible'}</small></span></div>`;
+ }).join('');
+ const auditBlock=`<hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><h3>Historial de asignaciones</h3>${auditError?`<div class="note">No se pudo cargar el historial: ${esc(auditError)}. Ejecuta la migración de auditoría y vuelve a abrir el detalle.</div>`:(auditRows||'<div class="empty">No hay eventos de asignación registrados todavía. Los cambios posteriores a la instalación de la auditoría quedarán registrados.</div>')}`;
  const body=`<div class="project-detail">
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${badge(status,op.status==='completed'?'success':op.status==='paused'?'warning':'info')}${badge(priority,op.priority==='critical'?'danger':op.priority==='high'?'warning':'info')}</div>
   <h3>${esc(op.title||'Operación sin título')}</h3>
@@ -1354,6 +1374,7 @@ async function viewOperation(id){
   <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
   <h3>Equipo e integrantes asignados</h3>
   <div class="table-scroll"><table><thead><tr><th>EQUIPO</th><th>INTEGRANTE</th><th>FUNCIÓN</th><th>ESTADO</th><th>FECHA</th></tr></thead><tbody>${assignmentRows||'<tr><td colspan="5"><div class="empty">Esta operación todavía no tiene asignaciones registradas.</div></td></tr>'}</tbody></table></div>
+  ${auditBlock}
  </div>`;
  dialog('Detalle de operación',body,`<button class="btn" data-close>Cerrar</button><button class="btn primary" data-action="ops-edit" data-id="${esc(op.id)}">Editar operación</button>`);
 }
