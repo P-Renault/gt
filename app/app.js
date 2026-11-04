@@ -1095,7 +1095,15 @@ function operationLinePoint(geojson, absoluteProgressKm, road, declaredLengthM){
  if(!Number.isFinite(relativeKm)||relativeKm<0||(range.end!=null&&Number(absoluteProgressKm)>range.end))return null;
  return inventoryLinePoint(geojson,relativeKm,declaredLengthM);
 }
-function inventoryPointFor(item){const hasCoords=item?.latitude!=null&&item?.longitude!=null&&Number.isFinite(Number(item.latitude))&&Number.isFinite(Number(item.longitude));if(hasCoords&&item?.metadata?.location_mode==='manual')return {lat:Number(item.latitude),lng:Number(item.longitude),manual:true};const g=inventoryRoadGeometries[item?.road_id];const derived=g?inventoryLinePoint(g.geojson,item?.km_progressive,g.length_m):null;if(derived)return {...derived,derived:true};if(hasCoords)return {lat:Number(item.latitude),lng:Number(item.longitude),legacy:true};return null}
+function inventoryAbsoluteLinePoint(geojson, absoluteProgressKm, road){
+ const start=Number(road?.intervention_start_km),end=Number(road?.intervention_end_km),km=Number(absoluteProgressKm);
+ if(!geojson||!Number.isFinite(start)||!Number.isFinite(end)||end<=start||!Number.isFinite(km)||km<start||km>end)return null;
+ let lines=[];if(geojson.type==='LineString')lines=[geojson.coordinates||[]];else if(geojson.type==='MultiLineString')lines=geojson.coordinates||[];else if(geojson.type==='GeometryCollection')lines=(geojson.geometries||[]).flatMap(g=>g.type==='LineString'?[g.coordinates||[]]:g.type==='MultiLineString'?(g.coordinates||[]):[]);
+ const rad=x=>x*Math.PI/180,hav=(a,b)=>{const dy=rad(b[1]-a[1]),dx=rad(b[0]-a[0]),q=Math.sin(dy/2)**2+Math.cos(rad(a[1]))*Math.cos(rad(b[1]))*Math.sin(dx/2)**2;return 6371008.8*2*Math.atan2(Math.sqrt(q),Math.sqrt(Math.max(0,1-q)))};
+ const segments=[];let total=0;for(const line of lines){for(let i=1;i<line.length;i++){const a=line[i-1],b=line[i];if(!Array.isArray(a)||!Array.isArray(b)||a.length<2||b.length<2)continue;const d=hav(a,b);if(d>0){segments.push({a,b,d});total+=d}}}
+ if(total<=0)return null;let remaining=((km-start)/(end-start))*total;for(const seg of segments){if(remaining<=seg.d){const f=Math.max(0,Math.min(1,remaining/seg.d));return {lat:Number(seg.a[1])+(Number(seg.b[1])-Number(seg.a[1]))*f,lng:Number(seg.a[0])+(Number(seg.b[0])-Number(seg.a[0]))*f,derived:true}}remaining-=seg.d}const last=segments[segments.length-1];return {lat:Number(last.b[1]),lng:Number(last.b[0]),derived:true};
+}
+function inventoryPointFor(item){const hasCoords=item?.latitude!=null&&item?.longitude!=null&&Number.isFinite(Number(item.latitude))&&Number.isFinite(Number(item.longitude));if(hasCoords&&item?.metadata?.location_mode==='manual')return {lat:Number(item.latitude),lng:Number(item.longitude),manual:true};const g=inventoryRoadGeometries[item?.road_id],road=inventoryRoads.find(r=>r.id===item?.road_id);const derived=g&&road?inventoryAbsoluteLinePoint(g.geojson,item?.km_progressive,road):null;if(derived)return {...derived,derived:true};if(hasCoords)return {lat:Number(item.latitude),lng:Number(item.longitude),legacy:true};return null}
 function refreshInventoryDerivedPoints(){inventoryRows=inventoryRows.map(x=>{const p=inventoryPointFor(x);return {...x,_mapLat:p?.lat??null,_mapLng:p?.lng??null}})}
 async function loadInventoryData(projectId=inventoryProjectId){
  const client=window.geoSupabase;inventoryProjectId=projectId||geoProjects.find(p=>p.status!=='archived')?.id||geoProjects[0]?.id||'';inventoryError='';inventoryLoading=true;
@@ -1104,7 +1112,7 @@ async function loadInventoryData(projectId=inventoryProjectId){
  if(!geoOrg||!inventoryProjectId){inventoryRows=[];inventoryRoads=[];inventorySegments=[];inventoryLoading=false;if(active==='inventario')show();return}
  try{
   const [r,s,i]=await Promise.all([
-   client.from('roads').select('id,code,name,road_type,surface_type,length_m,project_id,organization_id').eq('organization_id',geoOrg.id).eq('project_id',inventoryProjectId).order('code'),
+   client.from('roads').select('id,code,name,road_type,surface_type,length_m,geometry_length_m,intervention_start_km,intervention_end_km,project_id,organization_id').eq('organization_id',geoOrg.id).eq('project_id',inventoryProjectId).order('code'),
    client.from('segments').select('id,road_id,code,start_km,end_km,project_id,organization_id').eq('organization_id',geoOrg.id).eq('project_id',inventoryProjectId).order('start_km'),
    client.from('road_inventory').select('id,organization_id,project_id,road_id,segment_id,code,name,asset_type,condition,status,km_progressive,latitude,longitude,quantity,unit,installed_at,notes,metadata,created_at,updated_at').eq('organization_id',geoOrg.id).eq('project_id',inventoryProjectId).order('created_at',{ascending:false})
   ]);
@@ -1146,7 +1154,7 @@ async function loadIncidentData(projectId=incidentProjectId){
  if(!geoOrg||!incidentProjectId){incidentRows=[];incidentRoads=[];incidentSegments=[];incidentLoading=false;if(active==='incidencias')show();return}
  try{
   const [r,s,i]=await Promise.all([
-   client.from('roads').select('id,code,name,road_type,surface_type,length_m,project_id,organization_id').eq('organization_id',geoOrg.id).eq('project_id',incidentProjectId).order('code'),
+   client.from('roads').select('id,code,name,road_type,surface_type,length_m,geometry_length_m,intervention_start_km,intervention_end_km,project_id,organization_id').eq('organization_id',geoOrg.id).eq('project_id',incidentProjectId).order('code'),
    client.from('segments').select('id,road_id,code,start_km,end_km,project_id,organization_id').eq('organization_id',geoOrg.id).eq('project_id',incidentProjectId).order('start_km'),
    client.from('road_incidents').select('id,organization_id,project_id,road_id,segment_id,code,title,incident_type,severity,status,km_progressive,occurred_at,description,action_taken,metadata,created_at,updated_at').eq('organization_id',geoOrg.id).eq('project_id',incidentProjectId).order('created_at',{ascending:false})
   ]);for(const x of [r,s,i])if(x.error)throw x.error;incidentRoads=r.data||[];incidentSegments=s.data||[];incidentRows=i.data||[];incidentRoadGeometries={};
