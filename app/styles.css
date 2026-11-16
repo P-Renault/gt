@@ -382,3 +382,41 @@
 /* Inventario vial: mapa como primera tarjeta y acción principal centrada. */
 .inventory-add-action{display:flex;justify-content:center;align-items:center;margin:16px auto 4px;width:100%}.inventory-add-action .btn{min-width:min(100%,320px);min-height:48px;justify-content:center;text-align:center;font-weight:700}.inventory-map-panel .panel-body{padding-top:14px}.inventory-map-panel .inventory-gps-toolbar{justify-content:center;flex-wrap:wrap}.inventory-map-panel .inventory-gps-toolbar>div{flex:1 1 220px}.inventory-map-panel .inventory-gps-toolbar>.btn{min-width:190px;justify-content:center}
 @media(max-width:560px){.inventory-map-panel .inventory-map{height:420px!important;min-height:320px!important}.inventory-add-action .btn{width:100%;max-width:100%}.inventory-map-panel .inventory-gps-toolbar{align-items:stretch;flex-direction:column}.inventory-map-panel .inventory-gps-toolbar>.btn{width:100%}}
+
+/* Inventario vial: cabecera y tarjeta superior alineadas con la referencia móvil. */
+.inventory-top-card{border-radius:22px;overflow:hidden}
+.inventory-top-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:20px 22px 12px}
+.inventory-top-title{min-width:0;flex:1}
+.inventory-top-title h2{margin:0 0 8px;font-size:21px;letter-spacing:-.025em}
+.inventory-top-title .sub{line-height:1.55;max-width:470px}
+.inventory-top-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.inventory-top-actions .btn{min-height:48px;border-radius:14px;font-weight:650;white-space:nowrap}
+.inventory-top-actions .badge{min-height:48px;display:inline-flex;align-items:center;padding:0 14px;border-radius:14px;white-space:nowrap}
+.inventory-top-card .panel-body{padding:4px 22px 22px}
+.inventory-gps-main{width:100%;min-height:62px;border-radius:15px;justify-content:center;font-size:16px;font-weight:750;letter-spacing:.005em;margin:0 0 18px;box-shadow:0 7px 16px rgba(13,148,136,.13)}
+.inventory-top-card #inventoryMap{height:540px!important;min-height:360px!important;border-radius:17px!important}
+.inventory-map-status{margin-top:12px;line-height:1.55}
+.inventory-selected-road{display:grid;gap:6px;margin-top:18px;padding:18px 14px;border:1px solid var(--border,#dbe2e8);border-radius:18px;background:var(--panel,#fff)}
+.inventory-selected-road>b{font-size:17px;line-height:1.35}
+.inventory-selected-road>small{font-size:12px;color:var(--muted,#718096)}
+.inventory-road-gps{width:100%;min-height:62px;justify-content:center;border-radius:14px;margin-top:8px;font-size:15px;font-weight:750}
+.inventory-road-empty{background:rgba(15,118,110,.035)}
+.inventory-map-popup{min-width:220px;gap:9px}
+.inventory-map-popup>b{font-size:16px}
+.inventory-map-popup>div{font-size:14px}
+.inventory-map-popup>small{font-size:12px;color:#64748b}
+.inventory-map-popup .btn{width:100%;min-height:48px;justify-content:center;border-radius:13px;font-weight:750;margin-top:3px}
+@media(max-width:560px){
+ .inventory-top-card{border-radius:22px}
+ .inventory-top-head{padding:20px 20px 12px;gap:9px;align-items:flex-start}
+ .inventory-top-title h2{font-size:20px;line-height:1.25}
+ .inventory-top-title .sub{font-size:14px;line-height:1.55}
+ .inventory-top-actions{gap:7px}
+ .inventory-top-actions .btn{min-height:48px;padding:0 12px;font-size:12px}
+ .inventory-top-actions .badge{min-height:48px;padding:0 10px;font-size:11px;max-width:108px;white-space:normal;line-height:1.2}
+ .inventory-top-card .panel-body{padding:4px 20px 20px}
+ .inventory-gps-main{min-height:62px;margin-bottom:18px}
+ .inventory-top-card #inventoryMap{height:540px!important;min-height:420px!important}
+ .inventory-selected-road{padding:18px 14px;margin-top:18px}
+ .inventory-selected-road>b{font-size:16px}
+}
