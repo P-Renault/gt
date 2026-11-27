@@ -317,6 +317,8 @@
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
     overlay.querySelector('[data-geo-rvi-action="point"]').focus();
   }
+  // Public bridge: any active/visible road layer can open the same two-action menu.
+  window.__geoOpenRoadActionMenu = openRviActionMenu;
   document.addEventListener('click', event => {
     const button = event.target.closest('[data-geo-rvi-action]');
     if (!button) return;
@@ -335,6 +337,7 @@
     nationalLayer=L.geoJSON({type:'FeatureCollection',features:[]},{
       style:()=>({color:'#0d9488',weight:4,opacity:.88,lineCap:'round',lineJoin:'round'}),
       onEachFeature:(feature,layer)=>{
+        layer.__geoRviFeature=true;
         // Abrir la ficha persistente de GEOTRACIA, no el tooltip efímero de Leaflet.
         const getRoad=()=>{const p=feature.properties||{};return {id:p.id,source_id:String(p.source_id??p.osm_source_id??''),national_record_id:p.id,road_name:p.name||'',road_ref:p.ref||'',road_type:p.type||'',surface:p.surface||'',length_m:p.length_m,geometry:feature.geometry,source:'osm',attributes:{source:'OSM / Geofabrik Chile',source_record_id:p.source_id??p.osm_source_id??null,national_record_id:p.id,source_name:p.name||null,source_ref:p.ref||null,source_type:p.type||null,source_surface:p.surface||null}};};
         // Retrasa la ficha de un clic para distinguirla de un doble clic.
@@ -377,26 +380,125 @@
     }});
     nationalLayerControl=new Control();nationalLayerControl.addTo(map);
     map.on('moveend',()=>{if(!nationalLayerEnabled)return;clearTimeout(nationalMoveTimer);nationalMoveTimer=setTimeout(()=>refreshNationalLayer(),450);});
-    // Fallback for mobile double-taps: Leaflet may dispatch dblclick on the map
-    // rather than the thin road polyline. Resolve the closest visible RVI feature.
-    map.on('dblclick',event=>{
-      if(!nationalLayerEnabled||!nationalLayer)return;
-      if(Date.now()-(Number(window.__geoRviHandledDoubleClickAt)||0)<100)return;
-      const target=map.latLngToContainerPoint(event.latlng);let best=null,bestDistance=Infinity;
-      const distanceToSegment=(p,a,b)=>{const dx=b.x-a.x,dy=b.y-a.y;const den=dx*dx+dy*dy;const t=den?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/den)):0;return Math.hypot(p.x-(a.x+t*dx),p.y-(a.y+t*dy));};
-      const walk=(points,featureLayer)=>{
-        if(!Array.isArray(points))return;
-        if(points.length&&points[0]&&typeof points[0].lat==='number'){
-          for(let i=1;i<points.length;i++){const a=map.latLngToContainerPoint(points[i-1]),b=map.latLngToContainerPoint(points[i]);const d=distanceToSegment(target,a,b);if(d<bestDistance){bestDistance=d;best=featureLayer;}}
-        }else points.forEach(part=>walk(part,featureLayer));
-      };
-      nationalLayer.eachLayer(layer=>{if(layer.getLatLngs)walk(layer.getLatLngs(),layer);});
-      if(best&&bestDistance<=28){
-        window.__geoRviHandledDoubleClickAt=Date.now();
-        const feature=best.feature||{},p=feature.properties||{};
-        const road={id:p.id,source_id:String(p.source_id??p.osm_source_id??''),national_record_id:p.id,road_name:p.name||'',road_ref:p.ref||'',road_type:p.type||'',surface:p.surface||'',length_m:p.length_m,geometry:feature.geometry,source:'osm',attributes:{source:'OSM / Geofabrik Chile',source_record_id:p.source_id??p.osm_source_id??null,national_record_id:p.id,source_name:p.name||null,source_ref:p.ref||null,source_type:p.type||null,source_surface:p.surface||null}};
-        clearTimeout(nationalClickTimer);if(event.originalEvent){L.DomEvent.stopPropagation(event.originalEvent);L.DomEvent.preventDefault(event.originalEvent);}openRviActionMenu(road,event.latlng);
+    // Generic map hit-testing: works with any visible line layer, not only RVI.
+    // The layer-level RVI handler remains the fastest path; this handles other
+    // user/operator-selected overlays and mobile double-taps that bubble to map.
+    function layerRoad(featureLayer) {
+      const feature = featureLayer?.feature || {};
+      const p = feature.properties || featureLayer?.options?.properties || {};
+      let geometry = feature.geometry || null;
+      if (!geometry && typeof featureLayer?.toGeoJSON === 'function') {
+        try { geometry = featureLayer.toGeoJSON().geometry || null; } catch (_) {}
       }
+      const name = p.road_name || p.name || p.roadName || p.title || p.nombre || p.code || '';
+      return {
+        id: p.id ?? p.road_id ?? p.roadId ?? null,
+        source_id: String(p.source_id ?? p.osm_source_id ?? p.sourceId ?? p.id ?? ''),
+        national_record_id: p.national_record_id ?? p.id ?? null,
+        road_name: name,
+        road_ref: p.road_ref || p.ref || p.roadRef || p.route || '',
+        road_type: p.road_type || p.type || p.highway || p.clase || '',
+        surface: p.surface || p.superficie || '',
+        length_m: Number(p.length_m ?? p.geometry_length_m ?? p.length ?? NaN),
+        geometry,
+        source: p.source || 'map-layer',
+        attributes: { ...p, source_layer: featureLayer?.options?.pane || 'visible-map-layer' }
+      };
+    }
+    function closestVisibleLine(latlng, maxPx=32) {
+      const target = map.latLngToContainerPoint(latlng);
+      let bestLayer=null, bestDistance=Infinity;
+      const distanceToSegment=(p,a,b)=>{
+        const dx=b.x-a.x,dy=b.y-a.y,den=dx*dx+dy*dy;
+        const t=den?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/den)):0;
+        return Math.hypot(p.x-(a.x+t*dx),p.y-(a.y+t*dy));
+      };
+      const inspectLine=(points,featureLayer)=>{
+        if(!Array.isArray(points)||points.length<2)return;
+        if(points[0]&&typeof points[0].lat==='number'&&typeof points[0].lng==='number'){
+          for(let i=1;i<points.length;i++){
+            const a=map.latLngToContainerPoint(points[i-1]),b=map.latLngToContainerPoint(points[i]);
+            const d=distanceToSegment(target,a,b);
+            if(d<bestDistance){bestDistance=d;bestLayer=featureLayer;}
+          }
+        } else points.forEach(part=>inspectLine(part,featureLayer));
+      };
+      const seen=new Set();
+      const inspect=(layer)=>{
+        if(!layer||seen.has(layer))return;seen.add(layer);
+        if(typeof layer.getLatLngs==='function'){
+          try{inspectLine(layer.getLatLngs(),layer);}catch(_){}
+        }
+        if(typeof layer.eachLayer==='function')layer.eachLayer(inspect);
+      };
+      map.eachLayer(inspect);
+      return bestLayer&&bestDistance<=maxPx?{layer:bestLayer,distance:bestDistance}:null;
+    }
+    let genericSingleClickTimer=null;
+    function showGenericLineInfo(featureLayer,latlng){
+      const road=layerRoad(featureLayer);
+      const title=road.road_name||road.road_ref||'Camino seleccionado';
+      const rows=[
+        '<strong>'+esc(title)+'</strong>',
+        road.road_ref?'<div>Referencia: '+esc(road.road_ref)+'</div>':'',
+        road.road_type?'<div>Tipo: '+esc(road.road_type)+'</div>':'',
+        road.surface?'<div>Superficie: '+esc(road.surface)+'</div>':'',
+        Number.isFinite(road.length_m)&&road.length_m>0?'<div>Longitud: '+esc(fmtM(road.length_m))+'</div>':''
+      ].filter(Boolean).join('');
+      L.popup({closeButton:true,autoPan:false,offset:[0,-6],className:'geo-national-popup'})
+        .setLatLng(latlng).setContent(rows).openOn(map);
+    }
+    function bindGenericLine(layer){
+      if(!layer||layer.__geoGenericRoadBound||typeof layer.getLatLngs!=='function')return;
+      layer.__geoGenericRoadBound=true;
+      layer.on('dblclick',event=>{
+        if(Date.now()-(Number(window.__geoRviHandledDoubleClickAt)||0)<120)return;
+        const road=layerRoad(layer);
+        window.__geoRviHandledDoubleClickAt=Date.now();
+        if(event.originalEvent){L.DomEvent.stopPropagation(event.originalEvent);L.DomEvent.preventDefault(event.originalEvent);}
+        clearTimeout(genericSingleClickTimer);
+        closeCard('geo-national-card');
+        window.__geoRviPendingAction={road,latlng:{lat:Number(event.latlng.lat),lng:Number(event.latlng.lng)}};
+        openRviActionMenu(road,event.latlng);
+      });
+      if(!layer.__geoRviFeature){
+        layer.on('click',event=>{
+          clearTimeout(genericSingleClickTimer);
+          genericSingleClickTimer=setTimeout(()=>{
+            if(Date.now()-(Number(window.__geoRviHandledDoubleClickAt)||0)<500)return;
+            showGenericLineInfo(layer,event.latlng);
+          },180);
+        });
+      }
+    }
+    map.eachLayer(layer=>{
+      const bindDeep=ly=>{bindGenericLine(ly);if(typeof ly.eachLayer==='function')ly.eachLayer(bindDeep);};
+      bindDeep(layer);
+    });
+    map.on('layeradd',event=>{
+      const bindDeep=ly=>{bindGenericLine(ly);if(typeof ly.eachLayer==='function')ly.eachLayer(bindDeep);};
+      bindDeep(event.layer);
+    });
+    map.on('click',event=>{
+      clearTimeout(genericSingleClickTimer);
+      genericSingleClickTimer=setTimeout(()=>{
+        if(Date.now()-(Number(window.__geoRviHandledDoubleClickAt)||0)<500)return;
+        const hit=closestVisibleLine(event.latlng,24);
+        if(!hit)return;
+        showGenericLineInfo(hit.layer,event.latlng);
+      },180);
+    });
+    map.on('dblclick',event=>{
+      clearTimeout(genericSingleClickTimer);
+      if(Date.now()-(Number(window.__geoRviHandledDoubleClickAt)||0)<120)return;
+      const hit=closestVisibleLine(event.latlng,34);
+      if(!hit)return;
+      const road=layerRoad(hit.layer);
+      window.__geoRviHandledDoubleClickAt=Date.now();
+      if(event.originalEvent){L.DomEvent.stopPropagation(event.originalEvent);L.DomEvent.preventDefault(event.originalEvent);}
+      closeCard('geo-national-card');
+      window.__geoRviPendingAction={road,latlng:{lat:Number(event.latlng.lat),lng:Number(event.latlng.lng)}};
+      openRviActionMenu(road,event.latlng);
     });
   }
   function roadGeoPaths(geometry) {
