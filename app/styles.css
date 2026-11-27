@@ -424,3 +424,34 @@
 /* Toast notifications inside native dialogs: render above the modal content. */
 #dialog .toast.toast-in-dialog{display:block;position:absolute;left:16px;right:16px;bottom:72px;z-index:100001;width:auto;max-width:340px;margin-left:auto;transform:none;box-sizing:border-box;box-shadow:0 12px 35px #06182b40}
 @media(max-width:700px){#dialog .toast.toast-in-dialog{left:12px;right:12px;bottom:72px;max-width:none;width:auto}}
+
+
+/* Inventario GPS: sentido vial siempre visible y formulario cómodo en móvil. */
+.inventory-sense-field{
+  display:grid;
+  gap:7px;
+  padding:13px 14px;
+  border:1px solid #cbd5e1;
+  border-left:4px solid #0f766e;
+  border-radius:12px;
+  background:#f0fdfa;
+}
+.inventory-sense-field label{display:block;font-weight:750;color:#17324b;font-size:14px}
+.inventory-sense-field label span{color:#b91c1c}
+.inventory-sense-field select{width:100%;min-height:48px;font-size:16px}
+.inventory-sense-field small{display:block;color:#526579;font-size:12px;line-height:1.45}
+#dialog[open]{display:flex;flex-direction:column;max-height:calc(100dvh - 24px);overflow:hidden}
+#dialog[open] .dialog-head{flex:0 0 auto}
+#dialog[open] .dialog-body{flex:1 1 auto;max-height:none;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+#dialog[open] .dialog-foot{flex:0 0 auto;position:sticky;bottom:0;z-index:2}
+#dialog .toast.toast-in-dialog{position:relative;left:auto;right:auto;bottom:auto;z-index:3;width:auto;max-width:none;margin:8px 14px;transform:none;box-sizing:border-box}
+#dialog #invPhotoPreview img{display:block;width:100%;max-width:420px;max-height:clamp(110px,20vh,170px)!important;object-fit:contain;margin:0 auto}
+#dialog #invPhotoPreview{overflow-wrap:anywhere}
+@media(max-width:700px){
+  #dialog[open]{width:calc(100vw - 24px);max-height:calc(100dvh - 24px);display:flex;flex-direction:column}
+  #dialog[open] .dialog-head{flex:0 0 auto}
+  #dialog[open] .dialog-body{flex:1 1 auto;max-height:none;padding:12px 14px}
+  #dialog[open] .dialog-foot{padding:10px 12px;gap:8px}
+  .inventory-sense-field{padding:12px}
+  #dialog #invPhotoPreview img{max-height:clamp(100px,18vh,145px)!important}
+}
