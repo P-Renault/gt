@@ -18,6 +18,8 @@
   let osmButton = null, mopButton = null;
   let approxMode = false, approxPoints = [], approxLine = null, approxMarkers = [], approxBar = null;
   let latestOsmClick = null, latestMopClick = null;
+  // Defer OSM/MOP map-click selection so a double-click on the RVI can win.
+  let mapSelectClickTimer = null, mapSelectClickEvent = null;
   const $ = s => document.querySelector(s);
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const fmtM = m => m < 1000
@@ -305,9 +307,9 @@
     overlay.id = 'geo-rvi-action-overlay';
     overlay.className = 'geo-rvi-action-overlay';
     overlay.innerHTML = '<section class="geo-rvi-action-card" role="dialog" aria-modal="true" aria-labelledby="geo-rvi-action-title">' +
-      '<header><div><small>GEOTRACIA · ACCIONES VIALES</small><h2 id="geo-rvi-action-title">¿Qué deseas registrar?</h2><p>' + esc(road?.road_name || road?.road_ref || 'Vía seleccionada') + '</p></div>' +
+      '<header><div><small>GEOTRACIA · ACCIONES VIALES</small><h2 id="geo-rvi-action-title">¿Qué deseas agregar?</h2><p>' + esc(road?.road_name || road?.road_ref || 'Vía seleccionada') + '</p></div>' +
       '<button type="button" class="geo-rvi-action-close" aria-label="Cerrar">×</button></header>' +
-      '<div class="geo-rvi-action-buttons"><button type="button" data-geo-rvi-action="point"><span>1</span><span><b>Registrar punto</b><small>Guardar una referencia, inspección o incidencia en esta ubicación.</small></span></button>' +
+      '<div class="geo-rvi-action-buttons"><button type="button" data-geo-rvi-action="point"><span>1</span><span><b>Agregar punto</b><small>Guardar una referencia, inspección o incidencia en esta ubicación.</small></span></button>' +
       '<button type="button" data-geo-rvi-action="road"><span>2</span><span><b>Agregar camino al proyecto</b><small>Revisar los datos detectados y agregar la vía al proyecto activo.</small></span></button></div></section>';
     document.body.appendChild(overlay);
     const close = () => { overlay.remove(); };
@@ -643,7 +645,32 @@
       if(mopActive){osmActive=false;if(osmButton){osmButton.classList.remove('is-active');osmButton.setAttribute('aria-pressed','false');}map.getContainer().classList.remove('geo-osm-select-mode');closeCard('geo-osm-card');status('MOP activo: toca cerca de una vía para consultar el tramo oficial más cercano.');}
       else status('Consulta MOP desactivada.');
     });
-    map.on('click',e=>{if(osmActive)selectOsm(e.latlng);else if(mopActive)selectMop(e.latlng);});
+    map.on('click',e=>{
+      if(!osmActive&&!mopActive)return;
+      // The second click of a double-click must not start the OSM/MOP lookup.
+      // Leaflet dispatches click(s) before dblclick, so defer the single-click action.
+      if(Number(e.originalEvent?.detail)>=2){
+        clearTimeout(mapSelectClickTimer);
+        mapSelectClickTimer=null;
+        mapSelectClickEvent=null;
+        return;
+      }
+      clearTimeout(mapSelectClickTimer);
+      mapSelectClickEvent=e;
+      mapSelectClickTimer=setTimeout(()=>{
+        const selected=mapSelectClickEvent;
+        mapSelectClickEvent=null;
+        mapSelectClickTimer=null;
+        if(!selected)return;
+        if(osmActive)selectOsm(selected.latlng);
+        else if(mopActive)selectMop(selected.latlng);
+      },450);
+    });
+    map.on('dblclick',()=>{
+      clearTimeout(mapSelectClickTimer);
+      mapSelectClickTimer=null;
+      mapSelectClickEvent=null;
+    });
   }
   function hook() {
     if(!window.L?.map){setTimeout(hook,150);return;}
